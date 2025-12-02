@@ -3,7 +3,7 @@ import { SidebarLeft } from './components/SidebarLeft';
 import { SidebarRight } from './components/SidebarRight';
 import { MindMapCanvas } from './components/MindMapCanvas';
 import { MindNode, FilterType, TaskStatus, FileData } from './types';
-import { createNode, findNode, updateNodeInTree, addChildNode, addSiblingNode, deleteNodeFromTree, findParent, flattenTree, matchesFilter, moveNodeInTree, moveNodeToNewParent } from './utils';
+import { createNode, findNode, updateNodeInTree, addChildNode, addSiblingNode, deleteNodeFromTree, findParent, flattenTree, matchesFilter, matchesFilterState, moveNodeInTree, moveNodeToNewParent } from './utils';
 import { Save, FolderOpen, Download, RefreshCw } from 'lucide-react';
 
 const INITIAL_DATA: MindNode = {
@@ -129,9 +129,12 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
 export default function App() {
   const [root, setRoot] = useState<MindNode>(() => loadInitialData());
   const [selectedId, setSelectedId] = useState<string | null>(() => loadInitialData().id);
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [baseFilter, setBaseFilter] = useState<'all' | 'today' | TaskStatus>('all');
+  const [priorityFilters, setPriorityFilters] = useState<Set<'important' | 'urgent'>>(new Set());
   const [filteredIds, setFilteredIds] = useState<Set<string>>(new Set());
   const prevSelectedIdRef = useRef<string | null>(selectedId);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
+  const [hideUnmatched, setHideUnmatched] = useState(false);
 
   // Auto-save to localStorage whenever root changes
   useEffect(() => {
@@ -176,14 +179,14 @@ export default function App() {
   }, [selectedId]);
 
 
-  // Compute filters
+  // Compute filters with new multi-select logic
   useEffect(() => {
     const allNodes = flattenTree(root);
     const matches = new Set<string>();
-    
-    // First pass: find direct matches
+
+    // First pass: find direct matches using new filter state
     allNodes.forEach(node => {
-      if (matchesFilter(node, filter)) {
+      if (matchesFilterState(node, baseFilter, priorityFilters)) {
         matches.add(node.id);
         // Also add all ancestors to ensure visibility
         let curr = findParent(root, node.id);
@@ -194,7 +197,7 @@ export default function App() {
       }
     });
     setFilteredIds(matches);
-  }, [root, filter]);
+  }, [root, baseFilter, priorityFilters]);
 
   // Actions
   const handleUpdateNode = useCallback((updates: Partial<MindNode>) => {
@@ -341,12 +344,26 @@ export default function App() {
     <div className="flex h-screen w-screen bg-slate-50 text-slate-900 font-sans">
       
       {/* Left Sidebar: Outline */}
-      <SidebarLeft 
-        root={root} 
-        selectedId={selectedId} 
-        onSelect={setSelectedId} 
-        currentFilter={filter}
-        onSetFilter={setFilter}
+      <SidebarLeft
+        root={root}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        baseFilter={baseFilter}
+        priorityFilters={priorityFilters}
+        onSetBaseFilter={setBaseFilter}
+        onTogglePriorityFilter={(priority) => {
+          setPriorityFilters(prev => {
+            const next = new Set(prev);
+            if (next.has(priority)) {
+              next.delete(priority);
+            } else {
+              next.add(priority);
+            }
+            return next;
+          });
+        }}
+        hideUnmatched={hideUnmatched}
+        onToggleHideUnmatched={() => setHideUnmatched(!hideUnmatched)}
       />
 
       {/* Center: Canvas */}
@@ -386,24 +403,28 @@ export default function App() {
             selectedId={selectedId}
             onSelect={setSelectedId}
             onToggleExpand={handleToggleExpand}
-            filterMode={filter !== 'all'}
+            filterMode={baseFilter !== 'all' || priorityFilters.size > 0}
             filteredIds={filteredIds}
+            hideUnmatched={hideUnmatched}
             onUpdateNode={handleUpdateNodeById}
             onAddSibling={handleAddSibling}
             onAddChild={handleAddChild}
             onDelete={handleDelete}
+            onMove={handleMove}
             onNodeDrop={handleNodeDrop}
         />
       </div>
 
       {/* Right Sidebar: Properties */}
-      <SidebarRight 
-        node={selectedNode} 
-        onUpdate={handleUpdateNode} 
+      <SidebarRight
+        node={selectedNode}
+        onUpdate={handleUpdateNode}
         onDelete={handleDelete}
         onAddChild={handleAddChild}
         onAddSibling={handleAddSibling}
         onMove={handleMove}
+        isOpen={isRightSidebarOpen}
+        onToggle={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
       />
     </div>
   );

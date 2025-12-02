@@ -1,13 +1,17 @@
 import React from 'react';
-import { MindNode, FilterType, TaskStatus } from '../types';
-import { Calendar, Star, LayoutList, Flame } from 'lucide-react';
+import { MindNode, TaskStatus } from '../types';
+import { Calendar, Star, LayoutList, Flame, Eye, EyeOff } from 'lucide-react';
 
 interface SidebarLeftProps {
   root: MindNode;
   selectedId: string | null;
-  currentFilter: FilterType;
+  baseFilter: 'all' | 'today' | TaskStatus;
+  priorityFilters: Set<'important' | 'urgent'>;
   onSelect: (id: string) => void;
-  onSetFilter: (filter: FilterType) => void;
+  onSetBaseFilter: (filter: 'all' | 'today' | TaskStatus) => void;
+  onTogglePriorityFilter: (priority: 'important' | 'urgent') => void;
+  hideUnmatched: boolean;
+  onToggleHideUnmatched: () => void;
 }
 
 const OutlineNode: React.FC<{ node: MindNode; selectedId: string | null; onSelect: (id: string) => void; depth: number }> = ({ node, selectedId, onSelect, depth }) => {
@@ -33,13 +37,23 @@ const OutlineNode: React.FC<{ node: MindNode; selectedId: string | null; onSelec
   );
 };
 
-export const SidebarLeft: React.FC<SidebarLeftProps> = ({ root, selectedId, currentFilter, onSelect, onSetFilter }) => {
-  const filters: { id: FilterType; label: string; icon: React.ReactNode }[] = [
+export const SidebarLeft: React.FC<SidebarLeftProps> = ({
+  root,
+  selectedId,
+  baseFilter,
+  priorityFilters,
+  onSelect,
+  onSetBaseFilter,
+  onTogglePriorityFilter,
+  hideUnmatched,
+  onToggleHideUnmatched
+}) => {
+  const baseFilters: { id: 'all' | 'today' | TaskStatus; label: string; icon: React.ReactNode }[] = [
     { id: 'all', label: '全部', icon: <LayoutList size={16} /> },
     { id: 'today', label: '今日', icon: <Calendar size={16} /> },
   ];
 
-  const priorityFilters: { id: FilterType; label: string; icon: React.ReactNode }[] = [
+  const priorityFilterButtons: { id: 'important' | 'urgent'; label: string; icon: React.ReactNode }[] = [
     { id: 'important', label: '重要', icon: <Star size={16} className="text-yellow-600" /> },
     { id: 'urgent', label: '紧急', icon: <Flame size={16} className="text-red-600" /> },
   ];
@@ -53,15 +67,26 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({ root, selectedId, curr
         <p className="text-xs text-slate-500 mt-1">思维导图式待办管理</p>
       </div>
 
-      {/* Filters */}
+      {/* Base Filters */}
       <div className="p-2 space-y-1">
-        <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">筛选</p>
-        {filters.map(f => (
+        <div className="flex items-center justify-between px-3 py-2">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">筛选</p>
+          {(baseFilter !== 'all' || priorityFilters.size > 0) && (
+            <button
+              onClick={onToggleHideUnmatched}
+              className={`p-1 rounded transition-colors ${hideUnmatched ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 text-slate-400'}`}
+              title={hideUnmatched ? '显示所有节点' : '仅显示筛选结果'}
+            >
+              {hideUnmatched ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          )}
+        </div>
+        {baseFilters.map(f => (
           <button
             key={f.id}
-            onClick={() => onSetFilter(f.id)}
+            onClick={() => onSetBaseFilter(f.id)}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors
-              ${currentFilter === f.id ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-600 hover:bg-slate-50'}
+              ${baseFilter === f.id ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-600 hover:bg-slate-50'}
             `}
           >
             {f.icon}
@@ -70,19 +95,22 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({ root, selectedId, curr
         ))}
       </div>
 
-      {/* Priority Filters */}
+      {/* Priority Filters - Multi-Select */}
       <div className="p-2 space-y-1">
-        <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">优先级</p>
-        {priorityFilters.map(f => (
+        <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">优先级（可多选）</p>
+        {priorityFilterButtons.map(f => (
           <button
             key={f.id}
-            onClick={() => onSetFilter(f.id)}
+            onClick={() => onTogglePriorityFilter(f.id)}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors
-              ${currentFilter === f.id ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-600 hover:bg-slate-50'}
+              ${priorityFilters.has(f.id) ? 'bg-indigo-50 text-indigo-700 font-medium border-2 border-indigo-200' : 'text-slate-600 hover:bg-slate-50 border-2 border-transparent'}
             `}
           >
             {f.icon}
             {f.label}
+            {priorityFilters.has(f.id) && (
+              <span className="ml-auto text-indigo-600 text-xs">✓</span>
+            )}
           </button>
         ))}
       </div>

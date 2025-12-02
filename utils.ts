@@ -139,6 +139,36 @@ export const matchesFilter = (node: MindNode, filter: FilterType): boolean => {
   return node.status === filter;
 };
 
+// Check if a node matches the new filter state (supports multiple priority filters)
+export const matchesFilterState = (
+  node: MindNode,
+  baseFilter: 'all' | 'today' | TaskStatus,
+  priorityFilters: Set<'important' | 'urgent'>
+): boolean => {
+  // First check base filter
+  let baseMatch = true;
+  if (baseFilter === 'today') {
+    if (!node.dueDate) return false;
+    const today = new Date().toISOString().split('T')[0];
+    baseMatch = node.dueDate === today;
+  } else if (baseFilter !== 'all') {
+    // It's a TaskStatus
+    baseMatch = node.status === baseFilter;
+  }
+
+  if (!baseMatch) return false;
+
+  // Then check priority filters (must match ALL selected priorities)
+  if (priorityFilters.size === 0) return true;
+
+  for (const priority of priorityFilters) {
+    if (priority === 'important' && !node.isImportant) return false;
+    if (priority === 'urgent' && !node.isUrgent) return false;
+  }
+
+  return true;
+};
+
 // Move a node to a new parent (for drag and drop)
 export const moveNodeToNewParent = (
   root: MindNode,

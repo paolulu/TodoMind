@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { MindNode } from '../types';
+import { MindNode, TaskStatus } from '../types';
 import { STATUS_CONFIG, PRIORITY_BADGE_CONFIG } from '../constants';
-import { ChevronRight, ChevronDown, GripVertical } from 'lucide-react';
+import { ChevronRight, ChevronDown, GripVertical, Square, CheckSquare, Maximize2 } from 'lucide-react';
+import { ContextMenu } from './ContextMenu';
 
 interface MindMapCanvasProps {
   root: MindNode;
@@ -10,10 +11,12 @@ interface MindMapCanvasProps {
   onToggleExpand: (id: string, expanded: boolean) => void;
   filterMode: boolean;
   filteredIds: Set<string>;
+  hideUnmatched: boolean;
   onUpdateNode: (id: string, updates: Partial<MindNode>) => void;
   onAddSibling: () => void;
   onAddChild: () => void;
   onDelete: () => void;
+  onMove: (dir: 'up' | 'down') => void;
   onNodeDrop: (draggedNodeId: string, targetNodeId: string, insertIndex?: number) => void;
 }
 
@@ -26,10 +29,12 @@ const TreeNode: React.FC<{
   isFilteredMatch: boolean;
   filterActive: boolean;
   filteredIds: Set<string>;
+  hideUnmatched: boolean;
   onUpdateNode: (id: string, updates: Partial<MindNode>) => void;
   onAddSibling: () => void;
   onAddChild: () => void;
   onDelete: () => void;
+  onMove: (dir: 'up' | 'down') => void;
   onDragStart: (nodeId: string, e: React.DragEvent) => void;
   onDragOver: (nodeId: string, e: React.DragEvent) => void;
   onDrop: (nodeId: string, e: React.DragEvent) => void;
@@ -37,7 +42,8 @@ const TreeNode: React.FC<{
   dragOverNodeId: string | null;
   isRoot: boolean;
   draggedNodeId: string | null;
-}> = ({ node, selectedId, onSelect, onToggleExpand, isFilteredMatch, filterActive, filteredIds, onUpdateNode, onAddSibling, onAddChild, onDelete, onDragStart, onDragOver, onDrop, onDragEnd, dragOverNodeId, isRoot, draggedNodeId }) => {
+  onShowContextMenu: (nodeId: string, x: number, y: number) => void;
+}> = ({ node, selectedId, onSelect, onToggleExpand, isFilteredMatch, filterActive, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onDragStart, onDragOver, onDrop, onDragEnd, dragOverNodeId, isRoot, draggedNodeId, onShowContextMenu }) => {
   const isSelected = node.id === selectedId;
   const statusStyle = STATUS_CONFIG[node.status];
   const inputRef = useRef<HTMLInputElement>(null);
@@ -52,6 +58,12 @@ const TreeNode: React.FC<{
       inputRef.current.focus();
     }
   }, [isSelected]);
+
+  // If hideUnmatched is true and this node doesn't match, don't render it
+  // This check must come AFTER all hooks
+  if (hideUnmatched && filterActive && !isFilteredMatch) {
+    return null;
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Shortcuts inside the edit input
@@ -69,7 +81,7 @@ const TreeNode: React.FC<{
   };
 
   return (
-    <div className={`flex flex-row items-center ${opacityClass} transition-all duration-300`}>
+    <div className={`flex flex-row items-center ${opacityClass} transition-all duration-300 tree-node-container`}>
       {/* Node Content */}
       <div className="flex flex-col items-start relative z-10 group my-2">
         {/* Drag drop zone wrapper with larger hit area */}
@@ -86,9 +98,14 @@ const TreeNode: React.FC<{
               e.stopPropagation();
               onSelect(node.id);
             }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onShowContextMenu(node.id, e.clientX, e.clientY);
+            }}
             className={`
-              relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm cursor-pointer transition-all bg-white
-              ${statusStyle.color}
+              relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm cursor-pointer transition-all
+              ${node.status === TaskStatus.DONE ? 'bg-slate-100 border-slate-300 text-slate-400' : `bg-white ${statusStyle.color}`}
               ${isSelected ? 'ring-1 ring-indigo-500' : 'hover:shadow-md'}
               ${isDragOver ? 'ring-2 ring-green-500 bg-green-50' : ''}
               ${isDragging ? 'opacity-50' : ''}
@@ -116,6 +133,29 @@ const TreeNode: React.FC<{
             )}
           </div>
 
+          {/* Checkbox for non-IDEA status */}
+          {node.status !== TaskStatus.IDEA && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (node.status === TaskStatus.DONE) {
+                  // If already done, revert to previous status (TODO)
+                  onUpdateNode(node.id, { status: TaskStatus.TODO });
+                } else {
+                  // Mark as done
+                  onUpdateNode(node.id, { status: TaskStatus.DONE });
+                }
+              }}
+              className="flex-shrink-0 hover:scale-110 transition-transform"
+            >
+              {node.status === TaskStatus.DONE ? (
+                <CheckSquare size={18} className="text-slate-400" />
+              ) : (
+                <Square size={18} className="text-slate-400" />
+              )}
+            </button>
+          )}
+
           <div className="flex flex-col w-full min-w-0">
             {/* Auto-growing Input Container */}
             <div className="relative min-w-[80px]">
@@ -131,11 +171,11 @@ const TreeNode: React.FC<{
                         value={node.text}
                         onChange={(e) => onUpdateNode(node.id, { text: e.target.value })}
                         onKeyDown={handleKeyDown}
-                        className="absolute inset-0 w-full bg-transparent border-none outline-none font-medium text-sm p-0 m-0 text-inherit placeholder-slate-400/70 px-1"
+                        className={`absolute inset-0 w-full bg-transparent border-none outline-none font-medium text-sm p-0 m-0 text-inherit placeholder-slate-400/70 px-1 ${node.status === TaskStatus.DONE ? 'line-through' : ''}`}
                         placeholder="输入任务..."
                     />
                 ) : (
-                    <span className="absolute inset-0 font-medium text-sm select-none px-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                    <span className={`absolute inset-0 font-medium text-sm select-none px-1 overflow-hidden text-ellipsis whitespace-nowrap ${node.status === TaskStatus.DONE ? 'line-through' : ''}`}>
                         {node.text || ''}
                     </span>
                 )}
@@ -165,71 +205,85 @@ const TreeNode: React.FC<{
       </div>
 
       {/* Children & Connectors */}
-      {node.isExpanded && node.children.length > 0 && (
-        <div className="flex flex-row items-center">
-           {/* 1. Horizontal Link leaving the parent node */}
-           <div className="w-8 h-0.5 bg-slate-300"></div>
+      {node.isExpanded && node.children.length > 0 && (() => {
+        // Filter children based on hideUnmatched setting
+        const visibleChildren = hideUnmatched && filterActive
+          ? node.children.filter(child => filteredIds.has(child.id))
+          : node.children;
 
-           {/* 2. Container for children */}
-           <div className="flex flex-col">
-             {node.children.map((child, index) => {
-                const isFirst = index === 0;
-                const isLast = index === node.children.length - 1;
-                const isSingle = node.children.length === 1;
+        // Don't render connector container if no visible children
+        if (visibleChildren.length === 0) return null;
 
-                return (
-                   <div key={child.id} className="flex flex-row items-center relative">
-                       {/* Vertical Line Segment (The Spine) */}
-                       {/* Only needed if more than 1 child to connect them vertically */}
-                       {!isSingle && (
-                          <div
-                             className="absolute left-0 w-0.5 bg-slate-300"
-                             style={{
-                                // First child: starts at center (50%), goes down.
-                                // Last child: starts at top (0), goes to center (50%).
-                                // Middle child: goes full height (0 to 100%).
-                                top: isFirst ? '50%' : '0',
-                                height: isFirst || isLast ? '50%' : '100%'
-                             }}
-                          />
-                       )}
+        return (
+          <div className="flex flex-row items-center">
+             {/* 1. Horizontal Link leaving the parent node */}
+             <div className="w-8 h-0.5 bg-slate-300"></div>
 
-                       {/* Connector from Spine to Child */}
-                       <div className="w-8 h-0.5 bg-slate-300"></div>
+             {/* 2. Container for children */}
+             <div className="flex flex-col">
+               {visibleChildren.map((child, index) => {
+                  const isFirst = index === 0;
+                  const isLast = index === visibleChildren.length - 1;
+                  const isSingle = visibleChildren.length === 1;
 
-                       {/* Recursive Child Node */}
-                       <TreeNode
-                          node={child}
-                          selectedId={selectedId}
-                          onSelect={onSelect}
-                          onToggleExpand={onToggleExpand}
-                          filteredIds={filteredIds}
-                          isFilteredMatch={filteredIds.has(child.id)}
-                          filterActive={filterActive}
-                          onUpdateNode={onUpdateNode}
-                          onAddSibling={onAddSibling}
-                          onAddChild={onAddChild}
-                          onDelete={onDelete}
-                          onDragStart={onDragStart}
-                          onDragOver={onDragOver}
-                          onDrop={onDrop}
-                          onDragEnd={onDragEnd}
-                          dragOverNodeId={dragOverNodeId}
-                          draggedNodeId={draggedNodeId}
-                          isRoot={false}
-                       />
-                   </div>
-                );
-             })}
-           </div>
-        </div>
-      )}
+                  return (
+                     <div key={child.id} className="flex flex-row items-center relative">
+                         {/* Vertical Line Segment (The Spine) */}
+                         {/* Only needed if more than 1 child to connect them vertically */}
+                         {!isSingle && (
+                            <div
+                               className="absolute left-0 w-0.5 bg-slate-300"
+                               style={{
+                                  // First child: starts at center (50%), goes down.
+                                  // Last child: starts at top (0), goes to center (50%).
+                                  // Middle child: goes full height (0 to 100%).
+                                  top: isFirst ? '50%' : '0',
+                                  height: isFirst || isLast ? '50%' : '100%'
+                               }}
+                            />
+                         )}
+
+                         {/* Connector from Spine to Child */}
+                         <div className="w-8 h-0.5 bg-slate-300"></div>
+
+                         {/* Recursive Child Node */}
+                         <TreeNode
+                            node={child}
+                            selectedId={selectedId}
+                            onSelect={onSelect}
+                            onToggleExpand={onToggleExpand}
+                            filteredIds={filteredIds}
+                            isFilteredMatch={filteredIds.has(child.id)}
+                            filterActive={filterActive}
+                            hideUnmatched={hideUnmatched}
+                            onUpdateNode={onUpdateNode}
+                            onAddSibling={onAddSibling}
+                            onAddChild={onAddChild}
+                            onDelete={onDelete}
+                            onMove={onMove}
+                            onDragStart={onDragStart}
+                            onDragOver={onDragOver}
+                            onDrop={onDrop}
+                            onDragEnd={onDragEnd}
+                            dragOverNodeId={dragOverNodeId}
+                            draggedNodeId={draggedNodeId}
+                            isRoot={false}
+                            onShowContextMenu={onShowContextMenu}
+                         />
+                     </div>
+                  );
+               })}
+             </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
 
-export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, onUpdateNode, onAddSibling, onAddChild, onDelete, onNodeDrop }) => {
+export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentWrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const isDragging = useRef(false);
@@ -240,6 +294,13 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
   const [dragOverNodeId, setDragOverNodeId] = useState<string | null>(null);
   const draggedElementRef = useRef<HTMLElement | null>(null);
   const nodeRefs = useRef<Map<string, HTMLElement>>(new Map());
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    nodeId: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const handleWheel = (e: React.WheelEvent) => {
     // Zoom directly with wheel, no ctrl key needed
@@ -372,6 +433,108 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     setDragOverNodeId(null);
   };
 
+  // Context menu handlers
+  const handleShowContextMenu = (nodeId: string, x: number, y: number) => {
+    setContextMenu({ nodeId, x, y });
+    onSelect(nodeId);
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+  };
+
+  // Reset view to center and fit all nodes in viewport
+  const handleResetView = () => {
+    if (!containerRef.current || !contentWrapperRef.current) return;
+
+    const container = containerRef.current;
+    const contentWrapper = contentWrapperRef.current;
+    const containerRect = container.getBoundingClientRect();
+
+    // Get all tree node elements
+    const treeNodes = contentWrapper.querySelectorAll('.tree-node-container');
+    if (treeNodes.length === 0) return;
+
+    console.log('Resetting view, found', treeNodes.length, 'nodes');
+
+    // Calculate bounds in current transformed space, then convert to original space
+    // Current transform: translate(position.x + 50, position.y + 300) scale(scale)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    treeNodes.forEach(node => {
+      const rect = node.getBoundingClientRect();
+      const wrapperRect = contentWrapper.getBoundingClientRect();
+
+      // Convert to coordinates relative to the wrapper
+      const relativeLeft = rect.left - wrapperRect.left;
+      const relativeTop = rect.top - wrapperRect.top;
+      const relativeRight = relativeLeft + rect.width;
+      const relativeBottom = relativeTop + rect.height;
+
+      minX = Math.min(minX, relativeLeft);
+      minY = Math.min(minY, relativeTop);
+      maxX = Math.max(maxX, relativeRight);
+      maxY = Math.max(maxY, relativeBottom);
+    });
+
+    // Convert from transformed space back to original space
+    // In transformed space: point' = (point * scale) + (position + baseOffset)
+    // So: point = (point' - (position + baseOffset)) / scale
+    // But we're measuring relative to wrapper, which already includes the transform
+    // So the measured coordinates are already in transformed space
+
+    // For our purposes, we can use the measured bounds directly to calculate
+    // how to fit them in the viewport with a new transform
+
+    // Calculate tree dimensions in transformed space
+    const treeWidth = maxX - minX;
+    const treeHeight = maxY - minY;
+    const treeCenterX = minX + treeWidth / 2;
+    const treeCenterY = minY + treeHeight / 2;
+
+    // Calculate viewport dimensions with padding
+    const viewportWidth = containerRect.width;
+    const viewportHeight = containerRect.height;
+    const padding = 60; // 60px padding on each side
+
+    // Calculate required scale to fit tree in viewport
+    // treeWidth * newScale should be <= viewportWidth - 2*padding
+    const scaleX = (viewportWidth - padding * 2) / treeWidth;
+    const scaleY = (viewportHeight - padding * 2) / treeHeight;
+    let newScale = Math.min(scaleX, scaleY);
+
+    // Clamp scale between reasonable limits (0.1x to 3x)
+    newScale = Math.max(0.1, Math.min(3, newScale));
+
+    // Calculate position to center the tree
+    // We want: (treeCenterX * newScale) to be at viewport center
+    // But remember the transform includes +50 and +300 offsets
+    const viewportCenterX = viewportWidth / 2;
+    const viewportCenterY = viewportHeight / 2;
+
+    // The transform is: translate(x + 50, y + 300) scale(newScale)
+    // For a point P in original space, its transformed position is:
+    // P' = (P * newScale) + (x + 50, y + 300)
+    // We want treeCenter to map to viewportCenter:
+    // viewportCenter = (treeCenter * newScale) + (x + 50, y + 300)
+    // So: x = viewportCenterX - 50 - treeCenterX * newScale
+    //     y = viewportCenterY - 300 - treeCenterY * newScale
+    const targetX = viewportCenterX - 50 - treeCenterX * newScale;
+    const targetY = viewportCenterY - 300 - treeCenterY * newScale;
+
+    // Log calculations for debugging
+    console.log('Tree bounds:', { minX, minY, maxX, maxY, treeWidth, treeHeight });
+    console.log('Viewport:', { viewportWidth, viewportHeight });
+    console.log('Calculated scale:', newScale, 'target position:', { targetX, targetY });
+
+    // Apply new scale and position
+    setScale(newScale);
+    setPosition({
+      x: targetX,
+      y: targetY
+    });
+  };
+
   return (
     <div
       className="flex-1 overflow-hidden bg-slate-50 relative select-none"
@@ -383,8 +546,21 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
       onContextMenu={handleContextMenu}
       ref={containerRef}
     >
-        <div className="absolute top-4 left-4 z-50 bg-white/80 backdrop-blur p-2 rounded shadow text-xs text-slate-500 pointer-events-none select-none">
+        <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
+          <div className="bg-white/80 backdrop-blur p-2 rounded shadow text-xs text-slate-500 pointer-events-none select-none">
             滚轮缩放 • 右键拖拽平移 • 按住节点拖动移位
+          </div>
+          <button
+            onClick={handleResetView}
+            className="bg-white/90 backdrop-blur p-2 rounded shadow hover:bg-white hover:shadow-md transition-all pointer-events-auto"
+            title="重置视图到中心并适应视口"
+          >
+            <Maximize2 size={16} className="text-slate-600" />
+          </button>
+          {/* Debug info - can be removed after testing */}
+          <div className="bg-white/80 backdrop-blur p-2 rounded shadow text-xs text-slate-500 pointer-events-none select-none hidden">
+            缩放: {scale.toFixed(2)}x
+          </div>
         </div>
 
       <div
@@ -394,6 +570,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
           transition: isDragging.current ? 'none' : 'transform 0.1s ease-out'
         }}
         className="absolute top-0 left-0 p-20 canvas-content-wrapper"
+        ref={contentWrapperRef}
       >
         <TreeNode
           node={root}
@@ -403,10 +580,12 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
           isFilteredMatch={filteredIds.has(root.id)}
           filterActive={filterMode}
           filteredIds={filteredIds}
+          hideUnmatched={hideUnmatched}
           onUpdateNode={onUpdateNode}
           onAddSibling={onAddSibling}
           onAddChild={onAddChild}
           onDelete={onDelete}
+          onMove={onMove}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
@@ -414,8 +593,41 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
           dragOverNodeId={dragOverNodeId}
           draggedNodeId={draggedNodeId}
           isRoot={true}
+          onShowContextMenu={handleShowContextMenu}
         />
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (() => {
+        const node = root && findNode(root, contextMenu.nodeId);
+        if (!node) return null;
+
+        return (
+          <ContextMenu
+            node={node}
+            position={{ x: contextMenu.x, y: contextMenu.y }}
+            onClose={handleCloseContextMenu}
+            onUpdate={(updates) => {
+              onUpdateNode(contextMenu.nodeId, updates);
+            }}
+            onDelete={onDelete}
+            onAddChild={onAddChild}
+            onAddSibling={onAddSibling}
+            onMove={onMove}
+            isRoot={contextMenu.nodeId === root.id}
+          />
+        );
+      })()}
     </div>
   );
+};
+
+// Helper function to find node
+const findNode = (root: MindNode, nodeId: string): MindNode | null => {
+  if (root.id === nodeId) return root;
+  for (const child of root.children) {
+    const found = findNode(child, nodeId);
+    if (found) return found;
+  }
+  return null;
 };

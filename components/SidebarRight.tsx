@@ -1,7 +1,7 @@
 import React from 'react';
 import { MindNode, TaskStatus } from '../types';
 import { STATUS_CONFIG, PRIORITY_BADGE_CONFIG } from '../constants';
-import { Trash2, ArrowUp, ArrowDown, Plus, GitBranch } from 'lucide-react';
+import { Trash2, ArrowUp, ArrowDown, Plus, GitBranch, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface SidebarRightProps {
   node: MindNode | null;
@@ -10,22 +10,33 @@ interface SidebarRightProps {
   onAddChild: () => void;
   onAddSibling: () => void;
   onMove: (dir: 'up' | 'down') => void;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
-export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDelete, onAddChild, onAddSibling, onMove }) => {
-  if (!node) {
-    return (
-      <div className="w-80 bg-white border-l border-slate-200 h-full flex items-center justify-center text-slate-400 p-8 text-center z-20">
-        <div>
-           <p>选择一个节点以编辑属性</p>
-           <p className="text-xs mt-2">点击导图或大纲中的节点</p>
-        </div>
-      </div>
-    );
-  }
-
+export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDelete, onAddChild, onAddSibling, onMove, isOpen, onToggle }) => {
   return (
-    <div className="w-80 bg-white border-l border-slate-200 h-full flex flex-col shadow-xl z-20">
+    <div className={`relative h-full flex transition-all duration-300 ease-in-out ${isOpen ? 'w-80' : 'w-0'}`}>
+      {/* Toggle Button */}
+      <button
+        onClick={onToggle}
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full bg-white border border-slate-200 rounded-l-lg p-2 shadow-md hover:bg-slate-50 transition-colors z-30"
+        title={isOpen ? '收起侧边栏' : '展开侧边栏'}
+      >
+        {isOpen ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+      </button>
+
+      {/* Sidebar Content */}
+      <div className={`w-80 bg-white border-l border-slate-200 h-full flex flex-col shadow-xl transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        {!node ? (
+          <div className="w-full h-full flex items-center justify-center text-slate-400 p-8 text-center">
+            <div>
+              <p>选择一个节点以编辑属性</p>
+              <p className="text-xs mt-2">点击导图或大纲中的节点</p>
+            </div>
+          </div>
+        ) : (
+          <>
       <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
         <h2 className="font-semibold text-slate-800">任务详情</h2>
         <div className="flex gap-1">
@@ -137,6 +148,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDe
                <GitBranch size={16} /> 子级
              </button>
          </div>
+      </div>
+    </>
+        )}
       </div>
     </div>
   );

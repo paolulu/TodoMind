@@ -25,3 +25,8 @@ export interface FileData {
 }
 
 export type FilterType = 'all' | 'today' | 'important' | 'urgent' | TaskStatus;
+
+export interface FilterState {
+  baseFilter: 'all' | 'today' | TaskStatus;  // 基础筛选（互斥）
+  priorityFilters: Set<'important' | 'urgent'>;  // 优先级筛选（可多选）
+}

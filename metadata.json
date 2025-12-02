@@ -1,0 +1,5 @@
+{
+  "name": "MindMap Todo Master",
+  "description": "A professional Mind Map based To-Do list application designed for multi-threaded work management. Features tree-based task visualization, attributes management, filters, and file persistence.",
+  "requestFramePermissions": []
+}

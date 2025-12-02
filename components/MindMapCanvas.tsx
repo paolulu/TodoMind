@@ -18,6 +18,7 @@ interface MindMapCanvasProps {
   onDelete: () => void;
   onMove: (dir: 'up' | 'down') => void;
   onNodeDrop: (draggedNodeId: string, targetNodeId: string, insertIndex?: number) => void;
+  isLocked: boolean;
 }
 
 // A recursive component to render the tree horizontally with orthogonal lines
@@ -43,7 +44,8 @@ const TreeNode: React.FC<{
   isRoot: boolean;
   draggedNodeId: string | null;
   onShowContextMenu: (nodeId: string, x: number, y: number) => void;
-}> = ({ node, selectedId, onSelect, onToggleExpand, isFilteredMatch, filterActive, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onDragStart, onDragOver, onDrop, onDragEnd, dragOverNodeId, isRoot, draggedNodeId, onShowContextMenu }) => {
+  isLocked: boolean;
+}> = ({ node, selectedId, onSelect, onToggleExpand, isFilteredMatch, filterActive, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onDragStart, onDragOver, onDrop, onDragEnd, dragOverNodeId, isRoot, draggedNodeId, onShowContextMenu, isLocked }) => {
   const isSelected = node.id === selectedId;
   const statusStyle = STATUS_CONFIG[node.status];
   const inputRef = useRef<HTMLInputElement>(null);
@@ -91,8 +93,8 @@ const TreeNode: React.FC<{
           className="p-3 -m-3"
         >
           <div
-            draggable={!isRoot}
-            onDragStart={(e) => !isRoot && onDragStart(node.id, e)}
+            draggable={!isRoot && !isLocked}
+            onDragStart={(e) => !isRoot && !isLocked && onDragStart(node.id, e)}
             onDragEnd={onDragEnd}
             onClick={(e) => {
               e.stopPropagation();
@@ -101,7 +103,9 @@ const TreeNode: React.FC<{
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onShowContextMenu(node.id, e.clientX, e.clientY);
+              if (!isLocked) {
+                onShowContextMenu(node.id, e.clientX, e.clientY);
+              }
             }}
             className={`
               relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm cursor-pointer transition-all
@@ -164,7 +168,7 @@ const TreeNode: React.FC<{
                     {node.text || '输入任务...'}
                 </span>
 
-                {isSelected ? (
+                {isSelected && !isLocked ? (
                     <input
                         ref={inputRef}
                         type="text"
@@ -268,6 +272,7 @@ const TreeNode: React.FC<{
                             dragOverNodeId={dragOverNodeId}
                             draggedNodeId={draggedNodeId}
                             isRoot={false}
+                            isLocked={isLocked}
                             onShowContextMenu={onShowContextMenu}
                          />
                      </div>
@@ -281,7 +286,7 @@ const TreeNode: React.FC<{
   );
 };
 
-export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop }) => {
+export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop, isLocked }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -443,7 +448,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     setContextMenu(null);
   };
 
-  // Reset view to center and fit all nodes in viewport
+  // Reset view to center and fit all visible nodes in viewport
   const handleResetView = () => {
     if (!containerRef.current || !contentWrapperRef.current) return;
 
@@ -451,42 +456,61 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     const contentWrapper = contentWrapperRef.current;
     const containerRect = container.getBoundingClientRect();
 
-    // Get all tree node elements
-    const treeNodes = contentWrapper.querySelectorAll('.tree-node-container');
-    if (treeNodes.length === 0) return;
+    // Get all tree node elements that are currently visible (not hidden by filter)
+    const allTreeNodes = contentWrapper.querySelectorAll('.tree-node-container');
 
-    console.log('Resetting view, found', treeNodes.length, 'nodes');
+    // Filter to only visible nodes (ones that are not opacity-30 or hidden)
+    const visibleNodes = Array.from(allTreeNodes).filter(node => {
+      const computedStyle = window.getComputedStyle(node);
+      const display = computedStyle.display;
+      const visibility = computedStyle.visibility;
+      const opacity = parseFloat(computedStyle.opacity);
 
-    // Calculate bounds in current transformed space, then convert to original space
-    // Current transform: translate(position.x + 50, position.y + 300) scale(scale)
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    treeNodes.forEach(node => {
-      const rect = node.getBoundingClientRect();
-      const wrapperRect = contentWrapper.getBoundingClientRect();
-
-      // Convert to coordinates relative to the wrapper
-      const relativeLeft = rect.left - wrapperRect.left;
-      const relativeTop = rect.top - wrapperRect.top;
-      const relativeRight = relativeLeft + rect.width;
-      const relativeBottom = relativeTop + rect.height;
-
-      minX = Math.min(minX, relativeLeft);
-      minY = Math.min(minY, relativeTop);
-      maxX = Math.max(maxX, relativeRight);
-      maxY = Math.max(maxY, relativeBottom);
+      // If hideUnmatched is true and filterMode is active, only include nodes with full opacity
+      if (hideUnmatched && filterMode) {
+        return display !== 'none' && visibility !== 'hidden' && opacity > 0.5;
+      }
+      // Otherwise include all visible nodes
+      return display !== 'none' && visibility !== 'hidden';
     });
 
-    // Convert from transformed space back to original space
-    // In transformed space: point' = (point * scale) + (position + baseOffset)
-    // So: point = (point' - (position + baseOffset)) / scale
-    // But we're measuring relative to wrapper, which already includes the transform
-    // So the measured coordinates are already in transformed space
+    if (visibleNodes.length === 0) return;
 
-    // For our purposes, we can use the measured bounds directly to calculate
-    // how to fit them in the viewport with a new transform
+    console.log('Resetting view, found', visibleNodes.length, 'visible nodes out of', allTreeNodes.length, 'total');
+    console.log('Current scale:', scale, 'Current position:', position);
 
-    // Calculate tree dimensions in transformed space
+    // Calculate bounds in ORIGINAL (unscaled) space
+    // We need to convert from screen coordinates back to original content coordinates
+    const baseOffsetX = 50;
+    const baseOffsetY = 300;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    visibleNodes.forEach(node => {
+      const rect = node.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+
+      // Get screen coordinates relative to container
+      const screenX = rect.left - containerRect.left;
+      const screenY = rect.top - containerRect.top;
+      const screenRight = screenX + rect.width;
+      const screenBottom = screenY + rect.height;
+
+      // Convert from screen space back to ORIGINAL content space
+      // Screen formula: screenPos = (contentPos * scale) + (position + baseOffset)
+      // Reverse: contentPos = (screenPos - (position + baseOffset)) / scale
+      const contentLeft = (screenX - position.x - baseOffsetX) / scale;
+      const contentTop = (screenY - position.y - baseOffsetY) / scale;
+      const contentRight = (screenRight - position.x - baseOffsetX) / scale;
+      const contentBottom = (screenBottom - position.y - baseOffsetY) / scale;
+
+      minX = Math.min(minX, contentLeft);
+      minY = Math.min(minY, contentTop);
+      maxX = Math.max(maxX, contentRight);
+      maxY = Math.max(maxY, contentBottom);
+    });
+
+    // Calculate tree dimensions in ORIGINAL space
     const treeWidth = maxX - minX;
     const treeHeight = maxY - minY;
     const treeCenterX = minX + treeWidth / 2;
@@ -593,6 +617,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
           dragOverNodeId={dragOverNodeId}
           draggedNodeId={draggedNodeId}
           isRoot={true}
+          isLocked={isLocked}
           onShowContextMenu={handleShowContextMenu}
         />
       </div>
@@ -615,6 +640,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
             onAddSibling={onAddSibling}
             onMove={onMove}
             isRoot={contextMenu.nodeId === root.id}
+            isLocked={isLocked}
           />
         );
       })()}

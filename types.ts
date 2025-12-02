@@ -24,9 +24,9 @@ export interface FileData {
   lastSaved: number;
 }
 
-export type FilterType = 'all' | 'today' | 'important' | 'urgent' | TaskStatus;
+export type FilterType = 'all' | 'today' | 'overdue' | 'important' | 'urgent' | TaskStatus;
 
 export interface FilterState {
-  baseFilter: 'all' | 'today' | TaskStatus;  // 基础筛选（互斥）
+  baseFilter: 'all' | 'today' | 'overdue' | TaskStatus;  // 基础筛选（互斥）
   priorityFilters: Set<'important' | 'urgent'>;  // 优先级筛选（可多选）
 }

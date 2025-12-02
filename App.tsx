@@ -4,7 +4,7 @@ import { SidebarRight } from './components/SidebarRight';
 import { MindMapCanvas } from './components/MindMapCanvas';
 import { MindNode, FilterType, TaskStatus, FileData } from './types';
 import { createNode, findNode, updateNodeInTree, addChildNode, addSiblingNode, deleteNodeFromTree, findParent, flattenTree, matchesFilter, matchesFilterState, moveNodeInTree, moveNodeToNewParent } from './utils';
-import { Save, FolderOpen, Download, RefreshCw } from 'lucide-react';
+import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock } from 'lucide-react';
 
 const INITIAL_DATA: MindNode = {
   ...createNode('运营目标'),
@@ -129,12 +129,13 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
 export default function App() {
   const [root, setRoot] = useState<MindNode>(() => loadInitialData());
   const [selectedId, setSelectedId] = useState<string | null>(() => loadInitialData().id);
-  const [baseFilter, setBaseFilter] = useState<'all' | 'today' | TaskStatus>('all');
+  const [baseFilter, setBaseFilter] = useState<'all' | 'today' | 'overdue' | TaskStatus>('all');
   const [priorityFilters, setPriorityFilters] = useState<Set<'important' | 'urgent'>>(new Set());
   const [filteredIds, setFilteredIds] = useState<Set<string>>(new Set());
   const prevSelectedIdRef = useRef<string | null>(selectedId);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
   const [hideUnmatched, setHideUnmatched] = useState(false);
+  const [isLocked, setIsLocked] = useState(true); // 默认锁定
 
   // Auto-save to localStorage whenever root changes
   useEffect(() => {
@@ -350,7 +351,11 @@ export default function App() {
         onSelect={setSelectedId}
         baseFilter={baseFilter}
         priorityFilters={priorityFilters}
-        onSetBaseFilter={setBaseFilter}
+        onSetBaseFilter={(filter) => {
+          setBaseFilter(filter);
+          // 切换基础筛选时，清除优先级筛选
+          setPriorityFilters(new Set());
+        }}
         onTogglePriorityFilter={(priority) => {
           setPriorityFilters(prev => {
             const next = new Set(prev);
@@ -398,6 +403,22 @@ export default function App() {
            已自动保存到浏览器
         </div>
 
+        {/* Lock/Unlock Button */}
+        <div className="absolute bottom-4 right-4 z-50">
+          <button
+            onClick={() => setIsLocked(!isLocked)}
+            className={`flex items-center gap-2 px-3 py-2 rounded shadow text-sm font-medium transition-colors ${
+              isLocked
+                ? 'bg-slate-600 hover:bg-slate-700 text-white'
+                : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
+            title={isLocked ? '点击解锁以编辑' : '点击锁定以防止编辑'}
+          >
+            {isLocked ? <Lock size={16} /> : <Unlock size={16} />}
+            {isLocked ? '已锁定' : '已解锁'}
+          </button>
+        </div>
+
         <MindMapCanvas
             root={root}
             selectedId={selectedId}
@@ -412,6 +433,7 @@ export default function App() {
             onDelete={handleDelete}
             onMove={handleMove}
             onNodeDrop={handleNodeDrop}
+            isLocked={isLocked}
         />
       </div>
 
@@ -425,6 +447,7 @@ export default function App() {
         onMove={handleMove}
         isOpen={isRightSidebarOpen}
         onToggle={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+        isLocked={isLocked}
       />
     </div>
   );

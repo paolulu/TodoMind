@@ -12,9 +12,10 @@ interface SidebarRightProps {
   onMove: (dir: 'up' | 'down') => void;
   isOpen: boolean;
   onToggle: () => void;
+  isLocked: boolean;
 }
 
-export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDelete, onAddChild, onAddSibling, onMove, isOpen, onToggle }) => {
+export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDelete, onAddChild, onAddSibling, onMove, isOpen, onToggle, isLocked }) => {
   return (
     <div className={`relative h-full flex transition-all duration-300 ease-in-out ${isOpen ? 'w-80' : 'w-0'}`}>
       {/* Toggle Button */}
@@ -40,9 +41,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDe
       <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
         <h2 className="font-semibold text-slate-800">任务详情</h2>
         <div className="flex gap-1">
-            <button onClick={() => onMove('up')} className="p-1.5 hover:bg-slate-200 rounded text-slate-600" title="Move Up"><ArrowUp size={16}/></button>
-            <button onClick={() => onMove('down')} className="p-1.5 hover:bg-slate-200 rounded text-slate-600" title="Move Down"><ArrowDown size={16}/></button>
-            <button onClick={onDelete} className="p-1.5 hover:bg-red-100 text-slate-600 hover:text-red-600 rounded ml-2" title="Delete"><Trash2 size={16}/></button>
+            <button onClick={() => !isLocked && onMove('up')} disabled={isLocked} className={`p-1.5 rounded ${isLocked ? 'text-slate-300 cursor-not-allowed' : 'hover:bg-slate-200 text-slate-600'}`} title={isLocked ? '已锁定' : 'Move Up'}><ArrowUp size={16}/></button>
+            <button onClick={() => !isLocked && onMove('down')} disabled={isLocked} className={`p-1.5 rounded ${isLocked ? 'text-slate-300 cursor-not-allowed' : 'hover:bg-slate-200 text-slate-600'}`} title={isLocked ? '已锁定' : 'Move Down'}><ArrowDown size={16}/></button>
+            <button onClick={() => !isLocked && onDelete()} disabled={isLocked} className={`p-1.5 rounded ml-2 ${isLocked ? 'text-slate-300 cursor-not-allowed' : 'hover:bg-red-100 text-slate-600 hover:text-red-600'}`} title={isLocked ? '已锁定' : 'Delete'}><Trash2 size={16}/></button>
         </div>
       </div>
 
@@ -53,8 +54,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDe
           <input
             type="text"
             value={node.text}
-            onChange={(e) => onUpdate({ text: e.target.value })}
-            className="w-full text-lg font-bold border-b-2 border-slate-200 focus:border-indigo-500 outline-none py-1 bg-transparent transition-colors"
+            onChange={(e) => !isLocked && onUpdate({ text: e.target.value })}
+            disabled={isLocked}
+            className={`w-full text-lg font-bold border-b-2 outline-none py-1 bg-transparent transition-colors ${isLocked ? 'border-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-indigo-500'}`}
             placeholder="输入任务名称..."
           />
         </div>
@@ -66,9 +68,11 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDe
               {Object.entries(STATUS_CONFIG).map(([key, config]) => (
                 <button
                   key={key}
-                  onClick={() => onUpdate({ status: key as TaskStatus })}
+                  onClick={() => !isLocked && onUpdate({ status: key as TaskStatus })}
+                  disabled={isLocked}
                   className={`
                     flex items-center gap-2 px-3 py-2 rounded border-2 text-sm transition-all
+                    ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}
                     ${node.status === key
                       ? `${config.color} font-medium`
                       : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}
@@ -87,9 +91,11 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDe
            <div className="space-y-2">
               {/* Important Toggle */}
               <button
-                onClick={() => onUpdate({ isImportant: !node.isImportant })}
+                onClick={() => !isLocked && onUpdate({ isImportant: !node.isImportant })}
+                disabled={isLocked}
                 className={`
                   w-full flex items-center gap-2 px-3 py-2 rounded border-2 text-sm transition-all
+                  ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}
                   ${node.isImportant
                     ? `bg-yellow-50 border-yellow-200 ${PRIORITY_BADGE_CONFIG.important.color} font-medium`
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}
@@ -102,9 +108,11 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDe
 
               {/* Urgent Toggle */}
               <button
-                onClick={() => onUpdate({ isUrgent: !node.isUrgent })}
+                onClick={() => !isLocked && onUpdate({ isUrgent: !node.isUrgent })}
+                disabled={isLocked}
                 className={`
                   w-full flex items-center gap-2 px-3 py-2 rounded border-2 text-sm transition-all
+                  ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}
                   ${node.isUrgent
                     ? `bg-red-50 border-red-200 ${PRIORITY_BADGE_CONFIG.urgent.color} font-medium`
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}
@@ -123,8 +131,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDe
           <input
             type="date"
             value={node.dueDate || ''}
-            onChange={(e) => onUpdate({ dueDate: e.target.value })}
-            className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-200 outline-none text-sm"
+            onChange={(e) => !isLocked && onUpdate({ dueDate: e.target.value })}
+            disabled={isLocked}
+            className={`w-full px-3 py-2 border rounded-md outline-none text-sm ${isLocked ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:ring-2 focus:ring-indigo-200'}`}
           />
         </div>
 
@@ -133,18 +142,19 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({ node, onUpdate, onDe
           <label className="text-xs font-semibold text-slate-500 uppercase">备注</label>
           <textarea
             value={node.note || ''}
-            onChange={(e) => onUpdate({ note: e.target.value })}
-            className="w-full h-32 px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-200 outline-none text-sm resize-none"
+            onChange={(e) => !isLocked && onUpdate({ note: e.target.value })}
+            disabled={isLocked}
+            className={`w-full h-32 px-3 py-2 border rounded-md outline-none text-sm resize-none ${isLocked ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:ring-2 focus:ring-indigo-200'}`}
             placeholder="添加描述或详情..."
           />
         </div>
 
          {/* Quick Actions */}
          <div className="pt-4 border-t border-slate-100 grid grid-cols-2 gap-3">
-             <button onClick={onAddSibling} className="flex items-center justify-center gap-2 py-2 px-4 bg-white border border-slate-300 rounded hover:bg-slate-50 text-slate-700 text-sm font-medium">
+             <button onClick={() => !isLocked && onAddSibling()} disabled={isLocked} className={`flex items-center justify-center gap-2 py-2 px-4 border rounded text-sm font-medium ${isLocked ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'}`}>
                <Plus size={16} /> 同级
              </button>
-             <button onClick={onAddChild} className="flex items-center justify-center gap-2 py-2 px-4 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium">
+             <button onClick={() => !isLocked && onAddChild()} disabled={isLocked} className={`flex items-center justify-center gap-2 py-2 px-4 rounded text-sm font-medium ${isLocked ? 'bg-slate-400 text-slate-200 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
                <GitBranch size={16} /> 子级
              </button>
          </div>

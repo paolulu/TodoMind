@@ -13,6 +13,7 @@ interface ContextMenuProps {
   onAddSibling: () => void;
   onMove: (dir: 'up' | 'down') => void;
   isRoot: boolean;
+  isLocked: boolean;
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -25,6 +26,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onAddSibling,
   onMove,
   isRoot,
+  isLocked,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [adjustedPosition, setAdjustedPosition] = useState(position);

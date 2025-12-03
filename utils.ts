@@ -142,7 +142,7 @@ export const matchesFilter = (node: MindNode, filter: FilterType): boolean => {
 // Check if a node matches the new filter state (supports multiple priority filters)
 export const matchesFilterState = (
   node: MindNode,
-  baseFilter: 'all' | 'today' | 'overdue' | TaskStatus,
+  baseFilter: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus,
   priorityFilters: Set<'important' | 'urgent'>
 ): boolean => {
   // First check base filter
@@ -156,6 +156,11 @@ export const matchesFilterState = (
     if (!node.dueDate) return false;
     const today = new Date().toISOString().split('T')[0];
     baseMatch = node.dueDate < today && node.status !== TaskStatus.DONE;
+  } else if (baseFilter === 'planned') {
+    // Check if node has a due date and it's after today
+    if (!node.dueDate) return false;
+    const today = new Date().toISOString().split('T')[0];
+    baseMatch = node.dueDate > today;
   } else if (baseFilter !== 'all') {
     // It's a TaskStatus
     baseMatch = node.status === baseFilter;

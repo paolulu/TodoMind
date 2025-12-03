@@ -1,14 +1,14 @@
 import React from 'react';
 import { MindNode, TaskStatus } from '../types';
-import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock } from 'lucide-react';
 
 interface SidebarLeftProps {
   root: MindNode;
   selectedId: string | null;
-  baseFilter: 'all' | 'today' | 'overdue' | TaskStatus;
+  baseFilter: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus;
   priorityFilters: Set<'important' | 'urgent'>;
   onSelect: (id: string) => void;
-  onSetBaseFilter: (filter: 'all' | 'today' | 'overdue' | TaskStatus) => void;
+  onSetBaseFilter: (filter: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus) => void;
   onTogglePriorityFilter: (priority: 'important' | 'urgent') => void;
   hideUnmatched: boolean;
   onToggleHideUnmatched: () => void;
@@ -48,10 +48,11 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   hideUnmatched,
   onToggleHideUnmatched
 }) => {
-  const baseFilters: { id: 'all' | 'today' | 'overdue' | TaskStatus; label: string; icon: React.ReactNode }[] = [
+  const baseFilters: { id: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus; label: string; icon: React.ReactNode }[] = [
     { id: 'all', label: '全部', icon: <LayoutList size={16} /> },
     { id: 'today', label: '今日', icon: <Calendar size={16} /> },
     { id: 'overdue', label: '已到期', icon: <AlertCircle size={16} className="text-orange-600" /> },
+    { id: 'planned', label: '计划中', icon: <CalendarClock size={16} className="text-blue-600" /> },
   ];
 
   const priorityFilterButtons: { id: 'important' | 'urgent'; label: string; icon: React.ReactNode }[] = [

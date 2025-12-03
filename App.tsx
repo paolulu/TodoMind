@@ -129,7 +129,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
 export default function App() {
   const [root, setRoot] = useState<MindNode>(() => loadInitialData());
   const [selectedId, setSelectedId] = useState<string | null>(() => loadInitialData().id);
-  const [baseFilter, setBaseFilter] = useState<'all' | 'today' | 'overdue' | TaskStatus>('all');
+  const [baseFilter, setBaseFilter] = useState<'all' | 'today' | 'overdue' | 'planned' | TaskStatus>('all');
   const [priorityFilters, setPriorityFilters] = useState<Set<'important' | 'urgent'>>(new Set());
   const [filteredIds, setFilteredIds] = useState<Set<string>>(new Set());
   const prevSelectedIdRef = useRef<string | null>(selectedId);

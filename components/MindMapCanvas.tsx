@@ -599,7 +599,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     });
   }, [hideUnmatched, filterMode]);
 
-  // Auto-fit view when filter conditions change
+  // Auto-fit view when filter conditions change (not when nodes are added/deleted)
   useEffect(() => {
     // Trigger reset view when filters change
     // Wait a bit for DOM to update
@@ -608,7 +608,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     }, 100);
 
     return () => clearTimeout(timeoutId);
-  }, [filterMode, filteredIds, hideUnmatched, handleResetView]);
+  }, [filterMode, hideUnmatched, handleResetView]);
 
   return (
     <div

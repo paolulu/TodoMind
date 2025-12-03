@@ -1,2 +1,2 @@
 // 应用版本号
-export const APP_VERSION = 'v1.0.02';
+export const APP_VERSION = 'v1.0.03';

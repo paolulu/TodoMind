@@ -38,6 +38,8 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
   const [lastSaved, setLastSaved] = useState<number>(Date.now());
   const [isDirty, setIsDirty] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [lastFileModified, setLastFileModified] = useState<number>(0);
+  const [showSyncNotification, setShowSyncNotification] = useState(false);
 
   // Load file handle from IndexedDB on mount
   useEffect(() => {
@@ -49,6 +51,15 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
           setFileHandle(handle);
           setFileName(handle.name);
           console.log('✅ Successfully restored file handle:', handle.name);
+
+          // Initialize last modified time
+          try {
+            const file = await handle.getFile();
+            setLastFileModified(file.lastModified);
+            console.log('📅 Initial file modified time:', new Date(file.lastModified).toLocaleString());
+          } catch (err) {
+            console.warn('Could not read initial file modified time:', err);
+          }
         } else {
           console.log('⚠️ No file handle found in IndexedDB or permission denied');
         }
@@ -68,6 +79,49 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fileHandle, isDirty, data]);
+
+  // File polling: Check for external changes every 10 seconds
+  useEffect(() => {
+    if (!fileHandle) return;
+
+    const checkForUpdates = async () => {
+      try {
+        const file = await fileHandle.getFile();
+        const currentModified = file.lastModified;
+
+        // If file was modified externally (by another device/window)
+        if (lastFileModified > 0 && currentModified > lastFileModified) {
+          console.log('🔄 File modified externally detected!');
+          console.log('   Previous:', new Date(lastFileModified).toLocaleString());
+          console.log('   Current:', new Date(currentModified).toLocaleString());
+
+          // Only reload if we don't have unsaved changes
+          if (!isDirty) {
+            const text = await file.text();
+            const content: FileData = JSON.parse(text);
+            onLoad(content.root);
+            setLastFileModified(currentModified);
+            setLastSaved(content.lastSaved);
+
+            // Show notification
+            setShowSyncNotification(true);
+            setTimeout(() => setShowSyncNotification(false), 3000);
+
+            console.log('✅ Automatically reloaded file from external change');
+          } else {
+            console.warn('⚠️ External change detected but local changes exist - skipping auto-reload');
+          }
+        }
+      } catch (err) {
+        console.error('Error checking for file updates:', err);
+      }
+    };
+
+    // Check every 10 seconds
+    const interval = setInterval(checkForUpdates, 10000);
+
+    return () => clearInterval(interval);
+  }, [fileHandle, lastFileModified, isDirty, onLoad]);
 
   // Mark dirty on data change
   useEffect(() => {
@@ -104,6 +158,15 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
         await writable.close();
         setLastSaved(Date.now());
         setIsDirty(false);
+
+        // Update last modified time after save
+        try {
+          const file = await handle.getFile();
+          setLastFileModified(file.lastModified);
+        } catch (err) {
+          console.warn('Could not update last modified time after save:', err);
+        }
+
         console.log('Saved successfully to:', handle.name);
       } else if (!auto) {
          // Manual save without handle (or FS API failed) -> Fallback to download
@@ -140,6 +203,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
       setFileName(handle.name);
       setLastSaved(content.lastSaved);
       setIsDirty(false);
+      setLastFileModified(file.lastModified); // Track file modified time
       // Save handle to IndexedDB for persistence
       await saveFileHandle(handle);
       console.log('Loaded and saved handle for:', handle.name);
@@ -153,7 +217,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
     }
   };
 
-  return { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName };
+  return { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName, showSyncNotification };
 };
 
 export default function App() {
@@ -182,7 +246,7 @@ export default function App() {
   }, [root]);
 
   // Load persistence logic
-  const { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName } = useFileSystem(root, (newRoot) => {
+  const { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName, showSyncNotification } = useFileSystem(root, (newRoot) => {
     setRoot(newRoot);
     setSelectedId(newRoot.id);
   });
@@ -440,6 +504,14 @@ export default function App() {
              </div>
            )}
         </div>
+
+        {/* Sync Notification */}
+        {showSyncNotification && (
+          <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-bounce">
+            <RefreshCw size={16} className="animate-spin" />
+            <span className="font-medium">检测到文件更新，已自动同步！</span>
+          </div>
+        )}
 
         {/* Lock/Unlock Button */}
         <div className="absolute bottom-4 right-4 z-50">

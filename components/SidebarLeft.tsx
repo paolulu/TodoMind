@@ -1,6 +1,7 @@
 import React from 'react';
 import { MindNode, TaskStatus } from '../types';
 import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock } from 'lucide-react';
+import { APP_VERSION } from '../version';
 
 interface SidebarLeftProps {
   root: MindNode;
@@ -123,6 +124,11 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         <div className="pb-4">
            <OutlineNode node={root} selectedId={selectedId} onSelect={onSelect} depth={0} />
         </div>
+      </div>
+
+      {/* Version */}
+      <div className="p-3 border-t border-slate-100 bg-slate-50">
+        <p className="text-xs text-slate-400 text-center">{APP_VERSION}</p>
       </div>
     </div>
   );

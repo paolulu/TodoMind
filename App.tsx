@@ -89,19 +89,35 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
         const file = await fileHandle.getFile();
         const currentModified = file.lastModified;
 
+        console.log('[Sync Check]', {
+          lastFileModified: new Date(lastFileModified).toLocaleString(),
+          currentModified: new Date(currentModified).toLocaleString(),
+          lastSaved: new Date(lastSaved).toLocaleString(),
+          isDirty,
+          hasChange: currentModified > lastFileModified
+        });
+
         // If file was modified externally (by another device/window)
         if (lastFileModified > 0 && currentModified > lastFileModified) {
           console.log('🔄 File modified externally detected!');
-          console.log('   Previous:', new Date(lastFileModified).toLocaleString());
-          console.log('   Current:', new Date(currentModified).toLocaleString());
+          console.log('   File lastModified:', new Date(lastFileModified).toLocaleString(), '→', new Date(currentModified).toLocaleString());
+          console.log('   isDirty:', isDirty);
 
-          // Only reload if we don't have unsaved changes
-          if (!isDirty) {
-            const text = await file.text();
-            const content: FileData = JSON.parse(text);
+          // Always reload external changes for cross-device sync
+          // If both devices are editing simultaneously, the most recent save wins
+          const text = await file.text();
+          const content: FileData = JSON.parse(text);
+
+          console.log('   Local lastSaved:', new Date(lastSaved).toLocaleString());
+          console.log('   External lastSaved:', new Date(content.lastSaved).toLocaleString());
+          console.log('   Comparison:', content.lastSaved > lastSaved ? 'External is newer ✅' : 'Local is newer ⏸️');
+
+          // Check if external change is newer than our last save
+          if (content.lastSaved > lastSaved) {
             onLoad(content.root);
             setLastFileModified(currentModified);
             setLastSaved(content.lastSaved);
+            setIsDirty(false); // Reset dirty flag after loading
 
             // Show notification
             setShowSyncNotification(true);
@@ -109,7 +125,9 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
 
             console.log('✅ Automatically reloaded file from external change');
           } else {
-            console.warn('⚠️ External change detected but local changes exist - skipping auto-reload');
+            // Our local version is newer, just update the timestamp
+            console.log('📌 External file modified but local version is newer, keeping local changes');
+            setLastFileModified(currentModified);
           }
         }
       } catch (err) {
@@ -119,6 +137,9 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
 
     // Check every 10 seconds
     const interval = setInterval(checkForUpdates, 10000);
+
+    // Also check immediately on mount
+    checkForUpdates();
 
     return () => clearInterval(interval);
   }, [fileHandle, lastFileModified, isDirty, onLoad]);

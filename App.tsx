@@ -230,6 +230,7 @@ export default function App() {
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
   const [hideUnmatched, setHideUnmatched] = useState(false);
   const [isLocked, setIsLocked] = useState(true); // 默认锁定
+  const [newlyCreatedNodeId, setNewlyCreatedNodeId] = useState<string | null>(null); // 追踪新创建的节点
 
   // Auto-save to localStorage whenever root changes
   useEffect(() => {
@@ -311,9 +312,10 @@ export default function App() {
 
   const handleAddChild = useCallback(() => {
     if (!selectedId) return;
-    
+
     const newNode = createNode(''); // Empty text
     setRoot(prev => addChildNode(prev, selectedId, newNode));
+    setNewlyCreatedNodeId(newNode.id); // 标记为新创建的节点
     // Auto expand parent and select new child
     setTimeout(() => {
         handleToggleExpand(selectedId, true);
@@ -323,7 +325,7 @@ export default function App() {
 
   const handleAddSibling = useCallback(() => {
      if (!selectedId || selectedId === root.id) return; // Cannot add sibling to root
-     
+
      // Prevent adding sibling if current node is empty
      const currentNode = findNode(root, selectedId);
      if (currentNode && (!currentNode.text || currentNode.text.trim() === '')) {
@@ -334,6 +336,7 @@ export default function App() {
      if (parent) {
          const newNode = createNode(''); // Empty text
          setRoot(prev => addSiblingNode(prev, selectedId, newNode));
+         setNewlyCreatedNodeId(newNode.id); // 标记为新创建的节点
          setTimeout(() => setSelectedId(newNode.id), 50);
      }
   }, [selectedId, root]);
@@ -544,6 +547,8 @@ export default function App() {
             onMove={handleMove}
             onNodeDrop={handleNodeDrop}
             isLocked={isLocked}
+            newlyCreatedNodeId={newlyCreatedNodeId}
+            onClearNewlyCreated={() => setNewlyCreatedNodeId(null)}
         />
       </div>
 

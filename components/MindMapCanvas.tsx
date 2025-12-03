@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { MindNode, TaskStatus } from '../types';
 import { STATUS_CONFIG, PRIORITY_BADGE_CONFIG } from '../constants';
 import { ChevronRight, ChevronDown, GripVertical, Square, CheckSquare, Maximize2 } from 'lucide-react';
@@ -19,6 +19,8 @@ interface MindMapCanvasProps {
   onMove: (dir: 'up' | 'down') => void;
   onNodeDrop: (draggedNodeId: string, targetNodeId: string, insertIndex?: number) => void;
   isLocked: boolean;
+  newlyCreatedNodeId: string | null;
+  onClearNewlyCreated: () => void;
 }
 
 // A recursive component to render the tree horizontally with orthogonal lines
@@ -45,21 +47,40 @@ const TreeNode: React.FC<{
   draggedNodeId: string | null;
   onShowContextMenu: (nodeId: string, x: number, y: number) => void;
   isLocked: boolean;
-}> = ({ node, selectedId, onSelect, onToggleExpand, isFilteredMatch, filterActive, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onDragStart, onDragOver, onDrop, onDragEnd, dragOverNodeId, isRoot, draggedNodeId, onShowContextMenu, isLocked }) => {
+  newlyCreatedNodeId: string | null;
+  onClearNewlyCreated: () => void;
+}> = ({ node, selectedId, onSelect, onToggleExpand, isFilteredMatch, filterActive, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onDragStart, onDragOver, onDrop, onDragEnd, dragOverNodeId, isRoot, draggedNodeId, onShowContextMenu, isLocked, newlyCreatedNodeId, onClearNewlyCreated }) => {
   const isSelected = node.id === selectedId;
   const statusStyle = STATUS_CONFIG[node.status];
   const inputRef = useRef<HTMLInputElement>(null);
   const isDragOver = dragOverNodeId === node.id;
   const isDragging = draggedNodeId === node.id;
+  const [isEditing, setIsEditing] = useState(false);
+  const isNewlyCreated = node.id === newlyCreatedNodeId;
 
   const opacityClass = filterActive && !isFilteredMatch ? 'opacity-30 grayscale' : 'opacity-100';
 
-  // Auto-focus input when selected
+  // Auto-focus input when entering edit mode
   useEffect(() => {
-    if (isSelected && inputRef.current) {
+    if (isEditing && inputRef.current) {
       inputRef.current.focus();
     }
+  }, [isEditing]);
+
+  // Reset editing state when node is deselected
+  useEffect(() => {
+    if (!isSelected) {
+      setIsEditing(false);
+    }
   }, [isSelected]);
+
+  // Auto-enter edit mode for newly created nodes
+  useEffect(() => {
+    if (isNewlyCreated && isSelected && !isLocked) {
+      setIsEditing(true);
+      onClearNewlyCreated(); // Clear the flag after entering edit mode
+    }
+  }, [isNewlyCreated, isSelected, isLocked, onClearNewlyCreated]);
 
   // If hideUnmatched is true and this node doesn't match, don't render it
   // This check must come AFTER all hooks
@@ -71,14 +92,21 @@ const TreeNode: React.FC<{
     // Shortcuts inside the edit input
     if (e.key === 'Enter') {
         e.preventDefault();
+        setIsEditing(false);
         onAddSibling();
     } else if (e.key === 'Tab') {
         e.preventDefault();
+        setIsEditing(false);
         onAddChild();
     } else if (e.key === 'Delete' && e.ctrlKey) {
         // Ctrl+Delete to delete node while editing
         e.preventDefault();
         onDelete();
+    } else if (e.key === 'Escape') {
+        // Escape to exit edit mode
+        e.preventDefault();
+        setIsEditing(false);
+        inputRef.current?.blur();
     }
   };
 
@@ -98,7 +126,13 @@ const TreeNode: React.FC<{
             onDragEnd={onDragEnd}
             onClick={(e) => {
               e.stopPropagation();
-              onSelect(node.id);
+              if (isSelected && !isLocked) {
+                // Second click: enter edit mode
+                setIsEditing(true);
+              } else {
+                // First click: select node
+                onSelect(node.id);
+              }
             }}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -168,13 +202,14 @@ const TreeNode: React.FC<{
                     {node.text || '输入任务...'}
                 </span>
 
-                {isSelected && !isLocked ? (
+                {isEditing && !isLocked ? (
                     <input
                         ref={inputRef}
                         type="text"
                         value={node.text}
                         onChange={(e) => onUpdateNode(node.id, { text: e.target.value })}
                         onKeyDown={handleKeyDown}
+                        onBlur={() => setIsEditing(false)}
                         className={`absolute inset-0 w-full bg-transparent border-none outline-none font-medium text-sm p-0 m-0 text-inherit placeholder-slate-400/70 px-1 ${node.status === TaskStatus.DONE ? 'line-through' : ''}`}
                         placeholder="输入任务..."
                     />
@@ -274,6 +309,8 @@ const TreeNode: React.FC<{
                             isRoot={false}
                             isLocked={isLocked}
                             onShowContextMenu={onShowContextMenu}
+                            newlyCreatedNodeId={newlyCreatedNodeId}
+                            onClearNewlyCreated={onClearNewlyCreated}
                          />
                      </div>
                   );
@@ -286,7 +323,7 @@ const TreeNode: React.FC<{
   );
 };
 
-export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop, isLocked }) => {
+export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop, isLocked, newlyCreatedNodeId, onClearNewlyCreated }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -449,7 +486,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
   };
 
   // Reset view to center and fit all visible nodes in viewport
-  const handleResetView = () => {
+  const handleResetView = useCallback(() => {
     if (!containerRef.current || !contentWrapperRef.current) return;
 
     const container = containerRef.current;
@@ -477,7 +514,6 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     if (visibleNodes.length === 0) return;
 
     console.log('Resetting view, found', visibleNodes.length, 'visible nodes out of', allTreeNodes.length, 'total');
-    console.log('Current scale:', scale, 'Current position:', position);
 
     // Calculate bounds in ORIGINAL (unscaled) space
     // We need to convert from screen coordinates back to original content coordinates
@@ -485,6 +521,10 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     const baseOffsetY = 300;
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    // Get current scale and position from state
+    const currentScale = scale;
+    const currentPosition = position;
 
     visibleNodes.forEach(node => {
       const rect = node.getBoundingClientRect();
@@ -499,10 +539,10 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
       // Convert from screen space back to ORIGINAL content space
       // Screen formula: screenPos = (contentPos * scale) + (position + baseOffset)
       // Reverse: contentPos = (screenPos - (position + baseOffset)) / scale
-      const contentLeft = (screenX - position.x - baseOffsetX) / scale;
-      const contentTop = (screenY - position.y - baseOffsetY) / scale;
-      const contentRight = (screenRight - position.x - baseOffsetX) / scale;
-      const contentBottom = (screenBottom - position.y - baseOffsetY) / scale;
+      const contentLeft = (screenX - currentPosition.x - baseOffsetX) / currentScale;
+      const contentTop = (screenY - currentPosition.y - baseOffsetY) / currentScale;
+      const contentRight = (screenRight - currentPosition.x - baseOffsetX) / currentScale;
+      const contentBottom = (screenBottom - currentPosition.y - baseOffsetY) / currentScale;
 
       minX = Math.min(minX, contentLeft);
       minY = Math.min(minY, contentTop);
@@ -557,7 +597,18 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
       x: targetX,
       y: targetY
     });
-  };
+  }, [hideUnmatched, filterMode]);
+
+  // Auto-fit view when filter conditions change
+  useEffect(() => {
+    // Trigger reset view when filters change
+    // Wait a bit for DOM to update
+    const timeoutId = setTimeout(() => {
+      handleResetView();
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [filterMode, filteredIds, hideUnmatched, handleResetView]);
 
   return (
     <div
@@ -619,6 +670,8 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
           isRoot={true}
           isLocked={isLocked}
           onShowContextMenu={handleShowContextMenu}
+          newlyCreatedNodeId={newlyCreatedNodeId}
+          onClearNewlyCreated={onClearNewlyCreated}
         />
       </div>
 

@@ -5,6 +5,7 @@ import { MindMapCanvas } from './components/MindMapCanvas';
 import { MindNode, FilterType, TaskStatus, FileData } from './types';
 import { createNode, findNode, updateNodeInTree, addChildNode, addSiblingNode, deleteNodeFromTree, findParent, flattenTree, matchesFilter, matchesFilterState, moveNodeInTree, moveNodeToNewParent } from './utils';
 import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock } from 'lucide-react';
+import { saveFileHandle, loadFileHandle, clearFileHandle, getFileName } from './indexedDBHelper';
 
 const INITIAL_DATA: MindNode = {
   ...createNode('运营目标'),
@@ -36,6 +37,27 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
   const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
   const [lastSaved, setLastSaved] = useState<number>(Date.now());
   const [isDirty, setIsDirty] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  // Load file handle from IndexedDB on mount
+  useEffect(() => {
+    const restoreFileHandle = async () => {
+      try {
+        console.log('Attempting to restore file handle from IndexedDB...');
+        const handle = await loadFileHandle();
+        if (handle) {
+          setFileHandle(handle);
+          setFileName(handle.name);
+          console.log('✅ Successfully restored file handle:', handle.name);
+        } else {
+          console.log('⚠️ No file handle found in IndexedDB or permission denied');
+        }
+      } catch (err) {
+        console.error('❌ Failed to restore file handle:', err);
+      }
+    };
+    restoreFileHandle();
+  }, []);
 
   // Auto-save every 5 minutes
   useEffect(() => {
@@ -62,6 +84,10 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
             types: [{ description: 'MindMap JSON', accept: { 'application/json': ['.json'] } }],
             });
             setFileHandle(handle);
+            setFileName(handle.name);
+            // Save handle to IndexedDB for persistence
+            console.log('💾 Saving file handle to IndexedDB:', handle.name);
+            await saveFileHandle(handle);
         } catch (pickerErr) {
             // If user cancelled, just return
             if ((pickerErr as Error).name === 'AbortError') return;
@@ -78,7 +104,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
         await writable.close();
         setLastSaved(Date.now());
         setIsDirty(false);
-        console.log('Saved successfully');
+        console.log('Saved successfully to:', handle.name);
       } else if (!auto) {
          // Manual save without handle (or FS API failed) -> Fallback to download
          throw new Error("No file handle");
@@ -111,11 +137,15 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
       const content: FileData = JSON.parse(text);
       onLoad(content.root);
       setFileHandle(handle);
+      setFileName(handle.name);
       setLastSaved(content.lastSaved);
       setIsDirty(false);
+      // Save handle to IndexedDB for persistence
+      await saveFileHandle(handle);
+      console.log('Loaded and saved handle for:', handle.name);
     } catch (err) {
       console.error('Load failed or cancelled', err);
-      // If native picker fails, we could implement a file input fallback, 
+      // If native picker fails, we could implement a file input fallback,
       // but for now we assume modern browser or just log error.
       if ((err as Error).name !== 'AbortError') {
           alert("Could not open file picker. Please try dragging a file (not implemented yet) or ensure browser permissions.");
@@ -123,7 +153,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
     }
   };
 
-  return { saveFile, loadFile, lastSaved, isDirty, fileHandle };
+  return { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName };
 };
 
 export default function App() {
@@ -152,7 +182,7 @@ export default function App() {
   }, [root]);
 
   // Load persistence logic
-  const { saveFile, loadFile, lastSaved, isDirty, fileHandle } = useFileSystem(root, (newRoot) => {
+  const { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName } = useFileSystem(root, (newRoot) => {
     setRoot(newRoot);
     setSelectedId(newRoot.id);
   });
@@ -398,9 +428,17 @@ export default function App() {
         </div>
 
         {/* Status Bar */}
-        <div className="absolute bottom-4 left-4 z-50 bg-white/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-600 shadow-sm flex items-center gap-2">
-           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-           已自动保存到浏览器
+        <div className="absolute bottom-4 left-4 z-50 bg-white/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-600 shadow-sm flex items-center gap-3">
+           <div className="flex items-center gap-2">
+             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+             已自动保存到浏览器
+           </div>
+           {fileName && (
+             <div className="flex items-center gap-1 border-l border-slate-300 pl-3">
+               <span className="text-slate-400">文件:</span>
+               <span className="font-medium text-slate-700">{fileName}</span>
+             </div>
+           )}
         </div>
 
         {/* Lock/Unlock Button */}

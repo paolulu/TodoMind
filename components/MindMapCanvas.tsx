@@ -57,6 +57,7 @@ const TreeNode: React.FC<{
   const isDragging = draggedNodeId === node.id;
   const [isEditing, setIsEditing] = useState(false);
   const isNewlyCreated = node.id === newlyCreatedNodeId;
+  const [isComposing, setIsComposing] = useState(false); // 跟踪输入法组合状态
 
   const opacityClass = filterActive && !isFilteredMatch ? 'opacity-30 grayscale' : 'opacity-100';
 
@@ -89,6 +90,11 @@ const TreeNode: React.FC<{
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 如果正在使用输入法组合输入，不处理快捷键
+    if (isComposing) {
+      return;
+    }
+
     // Shortcuts inside the edit input
     if (e.key === 'Enter') {
         e.preventDefault();
@@ -210,6 +216,8 @@ const TreeNode: React.FC<{
                         onChange={(e) => onUpdateNode(node.id, { text: e.target.value })}
                         onKeyDown={handleKeyDown}
                         onBlur={() => setIsEditing(false)}
+                        onCompositionStart={() => setIsComposing(true)}
+                        onCompositionEnd={() => setIsComposing(false)}
                         className={`absolute inset-0 w-full bg-transparent border-none outline-none font-medium text-sm p-0 m-0 text-inherit placeholder-slate-400/70 px-1 ${node.status === TaskStatus.DONE ? 'line-through' : ''}`}
                         placeholder="输入任务..."
                     />

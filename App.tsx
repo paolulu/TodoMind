@@ -245,7 +245,7 @@ export default function App() {
   const [root, setRoot] = useState<MindNode>(() => loadInitialData());
   const [selectedId, setSelectedId] = useState<string | null>(() => loadInitialData().id);
   const [baseFilter, setBaseFilter] = useState<'all' | 'today' | 'overdue' | 'planned' | TaskStatus>('all');
-  const [priorityFilters, setPriorityFilters] = useState<Set<'important' | 'urgent'>>(new Set());
+  const [priorityFilters, setPriorityFilters] = useState<Set<'important' | 'urgent' | 'both'>>(new Set());
   const [filteredIds, setFilteredIds] = useState<Set<string>>(new Set());
   const prevSelectedIdRef = useRef<string | null>(selectedId);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
@@ -427,36 +427,107 @@ export default function App() {
             return;
         }
 
-        switch (e.key) {
-            case 'Tab':
-                e.preventDefault();
-                handleAddChild();
-                break;
-            case 'Enter':
-                e.preventDefault();
-                handleAddSibling();
-                break;
-            case 'Backspace':
-            case 'Delete':
-                handleDelete();
-                break;
-            case 'ArrowUp':
-                if (e.altKey) {
+        // 筛选快捷键 - 只在没有选中节点时生效
+        if (!selectedId) {
+            switch (e.key) {
+                case '0':
                     e.preventDefault();
-                    handleMove('up');
-                }
-                break;
-            case 'ArrowDown':
-                if (e.altKey) {
+                    setBaseFilter('all');
+                    setPriorityFilters(new Set());
+                    return;
+                case '1':
                     e.preventDefault();
-                    handleMove('down');
-                }
-                break;
+                    setBaseFilter('today');
+                    setPriorityFilters(new Set());
+                    return;
+                case '2':
+                    e.preventDefault();
+                    setBaseFilter('overdue');
+                    setPriorityFilters(new Set());
+                    return;
+                case '3':
+                    e.preventDefault();
+                    setBaseFilter('planned');
+                    setPriorityFilters(new Set());
+                    return;
+                case 'z':
+                case 'Z':
+                    e.preventDefault();
+                    setBaseFilter('all');
+                    setPriorityFilters(prev => {
+                        const next = new Set(prev);
+                        if (next.has('important')) {
+                            next.delete('important');
+                        } else {
+                            next.add('important');
+                        }
+                        return next;
+                    });
+                    return;
+                case 'j':
+                case 'J':
+                    e.preventDefault();
+                    setBaseFilter('all');
+                    setPriorityFilters(prev => {
+                        const next = new Set(prev);
+                        if (next.has('urgent')) {
+                            next.delete('urgent');
+                        } else {
+                            next.add('urgent');
+                        }
+                        return next;
+                    });
+                    return;
+                case 'q':
+                case 'Q':
+                    e.preventDefault();
+                    setBaseFilter('all');
+                    setPriorityFilters(prev => {
+                        const next = new Set(prev);
+                        if (next.has('both')) {
+                            next.delete('both');
+                        } else {
+                            next.add('both');
+                        }
+                        return next;
+                    });
+                    return;
+            }
+        }
+
+        // 节点操作快捷键 - 只在有选中节点时生效
+        if (selectedId) {
+            switch (e.key) {
+                case 'Tab':
+                    e.preventDefault();
+                    handleAddChild();
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    handleAddSibling();
+                    break;
+                case 'Backspace':
+                case 'Delete':
+                    handleDelete();
+                    break;
+                case 'ArrowUp':
+                    if (e.altKey) {
+                        e.preventDefault();
+                        handleMove('up');
+                    }
+                    break;
+                case 'ArrowDown':
+                    if (e.altKey) {
+                        e.preventDefault();
+                        handleMove('down');
+                    }
+                    break;
+            }
         }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleAddChild, handleAddSibling, handleDelete, handleMove, saveFile]);
+  }, [selectedId, handleAddChild, handleAddSibling, handleDelete, handleMove, saveFile]);
 
 
   return (

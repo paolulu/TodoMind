@@ -143,7 +143,7 @@ export const matchesFilter = (node: MindNode, filter: FilterType): boolean => {
 export const matchesFilterState = (
   node: MindNode,
   baseFilter: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus,
-  priorityFilters: Set<'important' | 'urgent'>
+  priorityFilters: Set<'important' | 'urgent' | 'both'>
 ): boolean => {
   // First check base filter
   let baseMatch = true;
@@ -168,15 +168,18 @@ export const matchesFilterState = (
 
   if (!baseMatch) return false;
 
-  // Then check priority filters (must match ALL selected priorities)
+  // Then check priority filters (OR logic for multiple selections)
   if (priorityFilters.size === 0) return true;
 
+  // Check each priority filter - if ANY matches, return true (OR logic)
   for (const priority of priorityFilters) {
-    if (priority === 'important' && !node.isImportant) return false;
-    if (priority === 'urgent' && !node.isUrgent) return false;
+    if (priority === 'important' && node.isImportant) return true;
+    if (priority === 'urgent' && node.isUrgent) return true;
+    if (priority === 'both' && node.isImportant && node.isUrgent) return true;
   }
 
-  return true;
+  // No priority filter matched
+  return false;
 };
 
 // Move a node to a new parent (for drag and drop)

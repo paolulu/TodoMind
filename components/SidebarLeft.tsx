@@ -7,10 +7,10 @@ interface SidebarLeftProps {
   root: MindNode;
   selectedId: string | null;
   baseFilter: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus;
-  priorityFilters: Set<'important' | 'urgent'>;
+  priorityFilters: Set<'important' | 'urgent' | 'both'>;
   onSelect: (id: string) => void;
   onSetBaseFilter: (filter: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus) => void;
-  onTogglePriorityFilter: (priority: 'important' | 'urgent') => void;
+  onTogglePriorityFilter: (priority: 'important' | 'urgent' | 'both') => void;
   hideUnmatched: boolean;
   onToggleHideUnmatched: () => void;
 }
@@ -49,16 +49,17 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   hideUnmatched,
   onToggleHideUnmatched
 }) => {
-  const baseFilters: { id: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus; label: string; icon: React.ReactNode }[] = [
-    { id: 'all', label: '全部', icon: <LayoutList size={16} /> },
-    { id: 'today', label: '今日', icon: <Calendar size={16} /> },
-    { id: 'overdue', label: '已到期', icon: <AlertCircle size={16} className="text-orange-600" /> },
-    { id: 'planned', label: '计划中', icon: <CalendarClock size={16} className="text-blue-600" /> },
+  const baseFilters: { id: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus; label: string; icon: React.ReactNode; shortcut: string }[] = [
+    { id: 'all', label: '全部', icon: <LayoutList size={16} />, shortcut: '0' },
+    { id: 'today', label: '今日', icon: <Calendar size={16} />, shortcut: '1' },
+    { id: 'overdue', label: '已到期', icon: <AlertCircle size={16} className="text-orange-600" />, shortcut: '2' },
+    { id: 'planned', label: '计划中', icon: <CalendarClock size={16} className="text-blue-600" />, shortcut: '3' },
   ];
 
-  const priorityFilterButtons: { id: 'important' | 'urgent'; label: string; icon: React.ReactNode }[] = [
-    { id: 'important', label: '重要', icon: <Star size={16} className="text-yellow-600" /> },
-    { id: 'urgent', label: '紧急', icon: <Flame size={16} className="text-red-600" /> },
+  const priorityFilterButtons: { id: 'important' | 'urgent' | 'both'; label: string; icon: React.ReactNode; shortcut: string }[] = [
+    { id: 'important', label: '重要', icon: <Star size={16} className="text-yellow-600" />, shortcut: 'Z' },
+    { id: 'urgent', label: '紧急', icon: <Flame size={16} className="text-red-600" />, shortcut: 'J' },
+    { id: 'both', label: '重要且紧急', icon: <span className="flex gap-0.5"><Star size={14} className="text-yellow-600" /><Flame size={14} className="text-red-600" /></span>, shortcut: 'Q' },
   ];
 
   return (
@@ -93,7 +94,8 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
             `}
           >
             {f.icon}
-            {f.label}
+            <span className="flex-1 text-left">{f.label}</span>
+            <span className="text-xs opacity-50 font-mono">({f.shortcut})</span>
           </button>
         ))}
       </div>
@@ -110,9 +112,10 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
             `}
           >
             {f.icon}
-            {f.label}
+            <span className="flex-1 text-left">{f.label}</span>
+            <span className="text-xs opacity-50 font-mono">({f.shortcut})</span>
             {priorityFilters.has(f.id) && (
-              <span className="ml-auto text-indigo-600 text-xs">✓</span>
+              <span className="text-indigo-600 text-xs">✓</span>
             )}
           </button>
         ))}

@@ -28,5 +28,5 @@ export type FilterType = 'all' | 'today' | 'overdue' | 'planned' | 'important' |
 
 export interface FilterState {
   baseFilter: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus;  // 基础筛选（互斥）
-  priorityFilters: Set<'important' | 'urgent'>;  // 优先级筛选（可多选）
+  priorityFilters: Set<'important' | 'urgent' | 'both'>;  // 优先级筛选（可多选，both=重要且紧急）
 }

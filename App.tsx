@@ -38,8 +38,31 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
   const [lastSaved, setLastSaved] = useState<number>(Date.now());
   const [isDirty, setIsDirty] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [filePath, setFilePath] = useState<string | null>(null);
+  const [fileSize, setFileSize] = useState<number>(0);
   const [lastFileModified, setLastFileModified] = useState<number>(0);
   const [showSyncNotification, setShowSyncNotification] = useState(false);
+
+  // Helper function to get file display path
+  // Note: Due to browser security, we cannot get the actual file system path
+  // This function tries to extract any available path information
+  const getFilePath = async (handle: FileSystemFileHandle): Promise<string | null> => {
+    try {
+      const file = await handle.getFile();
+
+      // Try webkitRelativePath (only available for directory picker)
+      if ((file as any).webkitRelativePath && (file as any).webkitRelativePath !== '') {
+        return (file as any).webkitRelativePath;
+      }
+
+      // For security reasons, File System Access API doesn't expose full paths
+      // Return null to indicate path is not available
+      return null;
+    } catch (err) {
+      console.warn('Could not get file path:', err);
+      return null;
+    }
+  };
 
   // Load file handle from IndexedDB on mount
   useEffect(() => {
@@ -50,15 +73,21 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
         if (handle) {
           setFileHandle(handle);
           setFileName(handle.name);
+
+          // Try to get full path and file info
+          const path = await getFilePath(handle);
+          setFilePath(path);
+
           console.log('✅ Successfully restored file handle:', handle.name);
 
-          // Initialize last modified time
+          // Initialize file metadata
           try {
             const file = await handle.getFile();
             setLastFileModified(file.lastModified);
+            setFileSize(file.size);
             console.log('📅 Initial file modified time:', new Date(file.lastModified).toLocaleString());
           } catch (err) {
-            console.warn('Could not read initial file modified time:', err);
+            console.warn('Could not read initial file metadata:', err);
           }
         } else {
           console.log('⚠️ No file handle found in IndexedDB or permission denied');
@@ -160,6 +189,11 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
             });
             setFileHandle(handle);
             setFileName(handle.name);
+
+            // Get and set file path
+            const path = await getFilePath(handle);
+            setFilePath(path);
+
             // Save handle to IndexedDB for persistence
             console.log('💾 Saving file handle to IndexedDB:', handle.name);
             await saveFileHandle(handle);
@@ -180,12 +214,13 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
         setLastSaved(Date.now());
         setIsDirty(false);
 
-        // Update last modified time after save
+        // Update file metadata after save
         try {
           const file = await handle.getFile();
           setLastFileModified(file.lastModified);
+          setFileSize(file.size);
         } catch (err) {
-          console.warn('Could not update last modified time after save:', err);
+          console.warn('Could not update file metadata after save:', err);
         }
 
         console.log('Saved successfully to:', handle.name);
@@ -222,9 +257,15 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
       onLoad(content.root);
       setFileHandle(handle);
       setFileName(handle.name);
+
+      // Get and set file path
+      const path = await getFilePath(handle);
+      setFilePath(path);
+
       setLastSaved(content.lastSaved);
       setIsDirty(false);
-      setLastFileModified(file.lastModified); // Track file modified time
+      setLastFileModified(file.lastModified);
+      setFileSize(file.size);
       // Save handle to IndexedDB for persistence
       await saveFileHandle(handle);
       console.log('Loaded and saved handle for:', handle.name);
@@ -238,7 +279,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
     }
   };
 
-  return { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName, showSyncNotification };
+  return { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName, filePath, fileSize, lastFileModified, showSyncNotification };
 };
 
 export default function App() {
@@ -252,6 +293,7 @@ export default function App() {
   const [hideUnmatched, setHideUnmatched] = useState(false);
   const [isLocked, setIsLocked] = useState(true); // 默认锁定
   const [newlyCreatedNodeId, setNewlyCreatedNodeId] = useState<string | null>(null); // 追踪新创建的节点
+  const [showFileInfoModal, setShowFileInfoModal] = useState(false); // 文件信息模态框
 
   // Auto-save to localStorage whenever root changes
   useEffect(() => {
@@ -268,7 +310,7 @@ export default function App() {
   }, [root]);
 
   // Load persistence logic
-  const { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName, showSyncNotification } = useFileSystem(root, (newRoot) => {
+  const { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName, filePath, fileSize, lastFileModified, showSyncNotification } = useFileSystem(root, (newRoot) => {
     setRoot(newRoot);
     setSelectedId(newRoot.id);
   });
@@ -587,7 +629,7 @@ export default function App() {
         </div>
 
         {/* Status Bar */}
-        <div className="absolute bottom-4 left-4 z-50 bg-white/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-600 shadow-sm flex items-center gap-3">
+        <div className="absolute bottom-4 left-4 z-50 bg-white/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-600 shadow-sm flex items-center gap-3 max-w-[600px]">
            <div className="flex items-center gap-2">
              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
              已自动保存到浏览器
@@ -595,7 +637,13 @@ export default function App() {
            {fileName && (
              <div className="flex items-center gap-1 border-l border-slate-300 pl-3">
                <span className="text-slate-400">文件:</span>
-               <span className="font-medium text-slate-700">{fileName}</span>
+               <button
+                 onClick={() => setShowFileInfoModal(true)}
+                 className="font-medium text-slate-700 hover:text-indigo-600 truncate cursor-pointer transition-colors underline decoration-dotted underline-offset-2"
+                 title="点击查看文件详细信息"
+               >
+                 {fileName}
+               </button>
              </div>
            )}
         </div>
@@ -656,6 +704,111 @@ export default function App() {
         onToggle={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
         isLocked={isLocked}
       />
+
+      {/* File Info Modal */}
+      {showFileInfoModal && fileName && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setShowFileInfoModal(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                📄 文件信息
+              </h2>
+              <button
+                onClick={() => setShowFileInfoModal(false)}
+                className="p-1 hover:bg-slate-200 rounded transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">文件名</label>
+                <p className="text-sm text-slate-700 font-medium mt-1 break-all">{fileName}</p>
+              </div>
+
+              {filePath && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">路径</label>
+                  <p className="text-sm text-slate-700 mt-1 break-all font-mono bg-slate-50 p-2 rounded">{filePath}</p>
+                </div>
+              )}
+
+              {!filePath && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                  <p className="text-xs text-yellow-800">
+                    ⚠️ 由于浏览器安全限制，无法显示完整文件系统路径。<br/>
+                    文件通过 File System Access API 访问。
+                  </p>
+                </div>
+              )}
+
+              {lastFileModified > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">最后修改时间</label>
+                  <p className="text-sm text-slate-700 mt-1">
+                    {new Date(lastFileModified).toLocaleString('zh-CN', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit'
+                    })}
+                  </p>
+                </div>
+              )}
+
+              {fileSize > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">文件大小</label>
+                  <p className="text-sm text-slate-700 mt-1">
+                    {fileSize < 1024
+                      ? `${fileSize} B`
+                      : fileSize < 1024 * 1024
+                        ? `${(fileSize / 1024).toFixed(2)} KB`
+                        : `${(fileSize / (1024 * 1024)).toFixed(2)} MB`
+                    }
+                  </p>
+                </div>
+              )}
+
+              {lastSaved && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">最后保存时间</label>
+                  <p className="text-sm text-slate-700 mt-1">
+                    {new Date(lastSaved).toLocaleString('zh-CN', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit'
+                    })}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button
+                onClick={() => setShowFileInfoModal(false)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

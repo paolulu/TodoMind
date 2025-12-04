@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MindNode, TaskStatus } from '../types';
-import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock } from 'lucide-react';
+import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock, HelpCircle, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import { APP_VERSION } from '../version';
+import { HelpModal } from './HelpModal';
+import { ChangelogModal } from './ChangelogModal';
 
 interface SidebarLeftProps {
   root: MindNode;
@@ -49,6 +51,10 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   hideUnmatched,
   onToggleHideUnmatched
 }) => {
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showChangelogModal, setShowChangelogModal] = useState(false);
+  const [isOutlineExpanded, setIsOutlineExpanded] = useState(false);
+
   const baseFilters: { id: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus; label: string; icon: React.ReactNode; shortcut: string }[] = [
     { id: 'all', label: '全部', icon: <LayoutList size={16} />, shortcut: '0' },
     { id: 'today', label: '今日', icon: <Calendar size={16} />, shortcut: '1' },
@@ -121,18 +127,51 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         ))}
       </div>
 
-      {/* Outline */}
-      <div className="flex-1 overflow-y-auto mt-2">
-        <p className="px-5 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider sticky top-0 bg-white">大纲</p>
-        <div className="pb-4">
-           <OutlineNode node={root} selectedId={selectedId} onSelect={onSelect} depth={0} />
+      {/* Outline - Collapsible */}
+      <div className="mt-2 border-t border-slate-100">
+        <button
+          onClick={() => setIsOutlineExpanded(!isOutlineExpanded)}
+          className="w-full flex items-center justify-between px-5 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:bg-slate-50 transition-colors"
+        >
+          <span>大纲</span>
+          {isOutlineExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+        {isOutlineExpanded && (
+          <div className="flex-1 overflow-y-auto max-h-64 pb-4">
+            <OutlineNode node={root} selectedId={selectedId} onSelect={onSelect} depth={0} />
+          </div>
+        )}
+      </div>
+
+      {/* Spacer to push footer to bottom */}
+      <div className="flex-1"></div>
+
+      {/* Footer with Help and Version */}
+      <div className="p-3 border-t border-slate-100 bg-slate-50">
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setShowHelpModal(true)}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
+            title="使用说明"
+          >
+            <HelpCircle size={14} />
+            <span>帮助</span>
+          </button>
+          <span className="text-slate-300">|</span>
+          <button
+            onClick={() => setShowChangelogModal(true)}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
+            title="版本更新日志"
+          >
+            <FileText size={14} />
+            <span>{APP_VERSION}</span>
+          </button>
         </div>
       </div>
 
-      {/* Version */}
-      <div className="p-3 border-t border-slate-100 bg-slate-50">
-        <p className="text-xs text-slate-400 text-center">{APP_VERSION}</p>
-      </div>
+      {/* Modals */}
+      <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
+      <ChangelogModal isOpen={showChangelogModal} onClose={() => setShowChangelogModal(false)} />
     </div>
   );
 };

@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SidebarLeft } from './components/SidebarLeft';
 import { SidebarRight } from './components/SidebarRight';
 import { MindMapCanvas } from './components/MindMapCanvas';
+import { QuickInput } from './components/QuickInput';
+import { QuickInputSettings } from './components/QuickInputSettings';
 import { MindNode, FilterType, TaskStatus, FileData } from './types';
 import { createNode, findNode, updateNodeInTree, addChildNode, addSiblingNode, deleteNodeFromTree, findParent, flattenTree, matchesFilter, matchesFilterState, moveNodeInTree, moveNodeToNewParent } from './utils';
-import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock } from 'lucide-react';
+import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock, Maximize2 } from 'lucide-react';
 import { saveFileHandle, loadFileHandle, clearFileHandle, getFileName } from './indexedDBHelper';
 
 const INITIAL_DATA: MindNode = {
@@ -16,6 +18,7 @@ const INITIAL_DATA: MindNode = {
 };
 
 const LOCALSTORAGE_KEY = 'mindmap-todo-data';
+const QUICK_INPUT_TARGET_KEY = 'mindmap-quick-input-target';
 
 // Load data from localStorage or return initial data
 const loadInitialData = (): MindNode => {
@@ -294,6 +297,23 @@ export default function App() {
   const [isLocked, setIsLocked] = useState(true); // 默认锁定
   const [newlyCreatedNodeId, setNewlyCreatedNodeId] = useState<string | null>(null); // 追踪新创建的节点
   const [showFileInfoModal, setShowFileInfoModal] = useState(false); // 文件信息模态框
+  const [showLockToast, setShowLockToast] = useState(false); // 锁定状态提示
+  const [lockToastMessage, setLockToastMessage] = useState(''); // 锁定提示消息
+
+  // Quick Input states
+  const [quickInputTargetId, setQuickInputTargetId] = useState<string | null>(() => {
+    try {
+      const stored = localStorage.getItem(QUICK_INPUT_TARGET_KEY);
+      return stored || null;
+    } catch {
+      return null;
+    }
+  });
+  const [showQuickInputSettings, setShowQuickInputSettings] = useState(false);
+  const [isQuickInputFocused, setIsQuickInputFocused] = useState(false);
+
+  // Ref for reset view function from MindMapCanvas
+  const resetViewRef = useRef<(() => void) | null>(null);
 
   // Auto-save to localStorage whenever root changes
   useEffect(() => {
@@ -455,6 +475,51 @@ export default function App() {
     // If userInput is null, user clicked Cancel, do nothing
   }, []);
 
+  // Quick Input: Save target node to localStorage
+  useEffect(() => {
+    if (quickInputTargetId) {
+      localStorage.setItem(QUICK_INPUT_TARGET_KEY, quickInputTargetId);
+    } else {
+      localStorage.removeItem(QUICK_INPUT_TARGET_KEY);
+    }
+  }, [quickInputTargetId]);
+
+  // Quick Input: Handle quick add
+  const handleQuickAdd = useCallback((text: string) => {
+    if (!quickInputTargetId) {
+      alert('请先设置快速输入的目标节点');
+      setShowQuickInputSettings(true);
+      return;
+    }
+
+    // Create new node with IDEA status
+    const newNode = createNode(text);
+    newNode.status = TaskStatus.IDEA;
+
+    // Add to target node
+    setRoot(prev => addChildNode(prev, quickInputTargetId, newNode));
+
+    // Expand target node to show the new node
+    setRoot(prev => updateNodeInTree(prev, quickInputTargetId, { isExpanded: true }));
+
+    console.log(`Quick added: "${text}" to node ${quickInputTargetId}`);
+  }, [quickInputTargetId]);
+
+  // Quick Input: Save target node setting
+  const handleSaveQuickInputTarget = useCallback((nodeId: string) => {
+    setQuickInputTargetId(nodeId);
+    console.log('Quick input target set to:', nodeId);
+  }, []);
+
+  // Handle lock toggle with toast notification
+  const handleToggleLock = useCallback(() => {
+    const newLockState = !isLocked;
+    setIsLocked(newLockState);
+    setLockToastMessage(newLockState ? '已锁定' : '已解锁');
+    setShowLockToast(true);
+    setTimeout(() => setShowLockToast(false), 2000);
+  }, [isLocked]);
+
   // Keyboard Shortcuts (Global)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -600,6 +665,7 @@ export default function App() {
         }}
         hideUnmatched={hideUnmatched}
         onToggleHideUnmatched={() => setHideUnmatched(!hideUnmatched)}
+        onOpenQuickInputSettings={() => setShowQuickInputSettings(true)}
       />
 
       {/* Center: Canvas */}
@@ -656,21 +722,38 @@ export default function App() {
           </div>
         )}
 
-        {/* Lock/Unlock Button */}
-        <div className="absolute bottom-4 right-4 z-50">
+        {/* Bottom Right Controls */}
+        <div className="absolute bottom-4 right-4 z-50 flex gap-2">
+          {/* Reset View Button */}
           <button
-            onClick={() => setIsLocked(!isLocked)}
-            className={`flex items-center gap-2 px-3 py-2 rounded shadow text-sm font-medium transition-colors ${
+            onClick={() => resetViewRef.current?.()}
+            className="p-2 rounded-full shadow-lg transition-all hover:scale-110 bg-white hover:bg-slate-100"
+            title="重置视图到中心并适应视口"
+          >
+            <Maximize2 size={20} className="text-slate-600" />
+          </button>
+
+          {/* Lock/Unlock Button */}
+          <button
+            onClick={handleToggleLock}
+            className={`p-2 rounded-full shadow-lg transition-all hover:scale-110 ${
               isLocked
                 ? 'bg-slate-600 hover:bg-slate-700 text-white'
                 : 'bg-green-600 hover:bg-green-700 text-white'
             }`}
             title={isLocked ? '点击解锁以编辑' : '点击锁定以防止编辑'}
           >
-            {isLocked ? <Lock size={16} /> : <Unlock size={16} />}
-            {isLocked ? '已锁定' : '已解锁'}
+            {isLocked ? <Lock size={20} /> : <Unlock size={20} />}
           </button>
         </div>
+
+        {/* Lock Status Toast */}
+        {showLockToast && (
+          <div className="absolute bottom-20 right-4 z-50 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+            {isLocked ? <Lock size={16} /> : <Unlock size={16} />}
+            <span className="font-medium">{lockToastMessage}</span>
+          </div>
+        )}
 
         <MindMapCanvas
             root={root}
@@ -689,6 +772,7 @@ export default function App() {
             isLocked={isLocked}
             newlyCreatedNodeId={newlyCreatedNodeId}
             onClearNewlyCreated={() => setNewlyCreatedNodeId(null)}
+            onResetViewRef={resetViewRef}
         />
       </div>
 
@@ -809,6 +893,21 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Quick Input */}
+      <QuickInput
+        onQuickAdd={handleQuickAdd}
+        onFocusChange={setIsQuickInputFocused}
+      />
+
+      {/* Quick Input Settings Modal */}
+      <QuickInputSettings
+        isOpen={showQuickInputSettings}
+        onClose={() => setShowQuickInputSettings(false)}
+        root={root}
+        currentTargetId={quickInputTargetId}
+        onSaveTarget={handleSaveQuickInputTarget}
+      />
     </div>
   );
 }

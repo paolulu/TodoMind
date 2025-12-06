@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MindNode, TaskStatus } from '../types';
-import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock, HelpCircle, FileText, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock, HelpCircle, FileText, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { APP_VERSION } from '../version';
 import { HelpModal } from './HelpModal';
 import { ChangelogModal } from './ChangelogModal';
@@ -15,6 +15,7 @@ interface SidebarLeftProps {
   onTogglePriorityFilter: (priority: 'important' | 'urgent' | 'both') => void;
   hideUnmatched: boolean;
   onToggleHideUnmatched: () => void;
+  onOpenQuickInputSettings?: () => void;
 }
 
 const OutlineNode: React.FC<{ node: MindNode; selectedId: string | null; onSelect: (id: string) => void; depth: number }> = ({ node, selectedId, onSelect, depth }) => {
@@ -49,7 +50,8 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   onSetBaseFilter,
   onTogglePriorityFilter,
   hideUnmatched,
-  onToggleHideUnmatched
+  onToggleHideUnmatched,
+  onOpenQuickInputSettings
 }) => {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showChangelogModal, setShowChangelogModal] = useState(false);
@@ -148,24 +150,35 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
 
       {/* Footer with Help and Version */}
       <div className="p-3 border-t border-slate-100 bg-slate-50">
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => setShowHelpModal(true)}
-            className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
-            title="使用说明"
-          >
-            <HelpCircle size={14} />
-            <span>帮助</span>
-          </button>
-          <span className="text-slate-300">|</span>
-          <button
-            onClick={() => setShowChangelogModal(true)}
-            className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
-            title="版本更新日志"
-          >
-            <FileText size={14} />
-            <span>{APP_VERSION}</span>
-          </button>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowHelpModal(true)}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
+              title="使用说明"
+            >
+              <HelpCircle size={14} />
+              <span>帮助</span>
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
+              onClick={() => setShowChangelogModal(true)}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
+              title="版本更新日志"
+            >
+              <FileText size={14} />
+              <span>{APP_VERSION}</span>
+            </button>
+          </div>
+          {onOpenQuickInputSettings && (
+            <button
+              onClick={onOpenQuickInputSettings}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
+              title="快速输入设置"
+            >
+              <Settings size={14} />
+            </button>
+          )}
         </div>
       </div>
 

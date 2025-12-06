@@ -21,6 +21,7 @@ interface MindMapCanvasProps {
   isLocked: boolean;
   newlyCreatedNodeId: string | null;
   onClearNewlyCreated: () => void;
+  onResetViewRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 // A recursive component to render the tree horizontally with orthogonal lines
@@ -331,7 +332,7 @@ const TreeNode: React.FC<{
   );
 };
 
-export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop, isLocked, newlyCreatedNodeId, onClearNewlyCreated }) => {
+export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop, isLocked, newlyCreatedNodeId, onClearNewlyCreated, onResetViewRef }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -607,6 +608,13 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     });
   }, [hideUnmatched, filterMode]);
 
+  // Expose handleResetView to parent component via ref
+  useEffect(() => {
+    if (onResetViewRef) {
+      onResetViewRef.current = handleResetView;
+    }
+  }, [onResetViewRef, handleResetView]);
+
   // Auto-fit view when filter conditions change (not when nodes are added/deleted)
   useEffect(() => {
     // Trigger reset view when filters change
@@ -629,22 +637,6 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
       onContextMenu={handleContextMenu}
       ref={containerRef}
     >
-        <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
-          <div className="bg-white/80 backdrop-blur p-2 rounded shadow text-xs text-slate-500 pointer-events-none select-none">
-            滚轮缩放 • 右键拖拽平移 • 按住节点拖动移位
-          </div>
-          <button
-            onClick={handleResetView}
-            className="bg-white/90 backdrop-blur p-2 rounded shadow hover:bg-white hover:shadow-md transition-all pointer-events-auto"
-            title="重置视图到中心并适应视口"
-          >
-            <Maximize2 size={16} className="text-slate-600" />
-          </button>
-          {/* Debug info - can be removed after testing */}
-          <div className="bg-white/80 backdrop-blur p-2 rounded shadow text-xs text-slate-500 pointer-events-none select-none hidden">
-            缩放: {scale.toFixed(2)}x
-          </div>
-        </div>
 
       <div
         style={{

@@ -342,6 +342,16 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
 
+  // Use refs to store latest scale and position for handleResetView
+  const scaleRef = useRef(scale);
+  const positionRef = useRef(position);
+
+  // Update refs whenever state changes
+  useEffect(() => {
+    scaleRef.current = scale;
+    positionRef.current = position;
+  }, [scale, position]);
+
   // Drag and drop state
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [dragOverNodeId, setDragOverNodeId] = useState<string | null>(null);
@@ -533,10 +543,10 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    // Get current scale and position from state at the time of execution
-    // We don't use the closure variables to ensure we always get the latest values
-    const currentScale = scale;
-    const currentPosition = position;
+    // Get current scale and position from refs to ensure we always get the latest values
+    // This avoids adding scale/position to the dependency array which would cause infinite loops
+    const currentScale = scaleRef.current;
+    const currentPosition = positionRef.current;
 
     visibleNodes.forEach(node => {
       const rect = node.getBoundingClientRect();
@@ -609,7 +619,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
       x: targetX,
       y: targetY
     });
-  }, [hideUnmatched, filterMode, scale, position]);
+  }, [hideUnmatched, filterMode]);
 
   // Expose handleResetView to parent component via ref
   useEffect(() => {

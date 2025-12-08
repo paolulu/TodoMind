@@ -2,11 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SidebarLeft } from './components/SidebarLeft';
 import { SidebarRight } from './components/SidebarRight';
 import { MindMapCanvas } from './components/MindMapCanvas';
-import { QuickInput } from './components/QuickInput';
-import { QuickInputSettings } from './components/QuickInputSettings';
 import { MindNode, FilterType, TaskStatus, FileData } from './types';
 import { createNode, findNode, updateNodeInTree, addChildNode, addSiblingNode, deleteNodeFromTree, findParent, flattenTree, matchesFilter, matchesFilterState, moveNodeInTree, moveNodeToNewParent } from './utils';
-import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock, Maximize2 } from 'lucide-react';
+import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock, Maximize2, Sun, Moon } from 'lucide-react';
 import { saveFileHandle, loadFileHandle, clearFileHandle, getFileName } from './indexedDBHelper';
 
 const INITIAL_DATA: MindNode = {
@@ -18,7 +16,7 @@ const INITIAL_DATA: MindNode = {
 };
 
 const LOCALSTORAGE_KEY = 'mindmap-todo-data';
-const QUICK_INPUT_TARGET_KEY = 'mindmap-quick-input-target';
+const THEME_KEY = 'mindmap-theme';
 
 // Load data from localStorage or return initial data
 const loadInitialData = (): MindNode => {
@@ -299,21 +297,31 @@ export default function App() {
   const [showFileInfoModal, setShowFileInfoModal] = useState(false); // 文件信息模态框
   const [showLockToast, setShowLockToast] = useState(false); // 锁定状态提示
   const [lockToastMessage, setLockToastMessage] = useState(''); // 锁定提示消息
-
-  // Quick Input states
-  const [quickInputTargetId, setQuickInputTargetId] = useState<string | null>(() => {
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
-      const stored = localStorage.getItem(QUICK_INPUT_TARGET_KEY);
-      return stored || null;
+      const stored = localStorage.getItem(THEME_KEY);
+      return stored === 'dark';
     } catch {
-      return null;
+      return false;
     }
   });
-  const [showQuickInputSettings, setShowQuickInputSettings] = useState(false);
-  const [isQuickInputFocused, setIsQuickInputFocused] = useState(false);
 
   // Ref for reset view function from MindMapCanvas
   const resetViewRef = useRef<(() => void) | null>(null);
+
+  // Persist and apply theme
+  useEffect(() => {
+    try {
+      localStorage.setItem(THEME_KEY, isDarkMode ? 'dark' : 'light');
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (err) {
+      console.error('Failed to save theme:', err);
+    }
+  }, [isDarkMode]);
 
   // Auto-save to localStorage whenever root changes
   useEffect(() => {
@@ -357,6 +365,33 @@ export default function App() {
     prevSelectedIdRef.current = selectedId;
   }, [selectedId]);
 
+
+  // Calculate filter counts
+  const filterCounts = React.useMemo(() => {
+    const allNodes = flattenTree(root);
+
+    return {
+      all: allNodes.length,
+      today: allNodes.filter(node => {
+        if (!node.dueDate) return false;
+        const today = new Date().toISOString().split('T')[0];
+        return node.dueDate === today;
+      }).length,
+      overdue: allNodes.filter(node => {
+        if (!node.dueDate) return false;
+        const today = new Date().toISOString().split('T')[0];
+        return node.dueDate < today && node.status !== TaskStatus.DONE;
+      }).length,
+      planned: allNodes.filter(node => {
+        if (!node.dueDate) return false;
+        const today = new Date().toISOString().split('T')[0];
+        return node.dueDate > today;
+      }).length,
+      important: allNodes.filter(node => node.isImportant).length,
+      urgent: allNodes.filter(node => node.isUrgent).length,
+      both: allNodes.filter(node => node.isImportant && node.isUrgent).length,
+    };
+  }, [root]);
 
   // Compute filters with new multi-select logic
   useEffect(() => {
@@ -475,42 +510,6 @@ export default function App() {
     // If userInput is null, user clicked Cancel, do nothing
   }, []);
 
-  // Quick Input: Save target node to localStorage
-  useEffect(() => {
-    if (quickInputTargetId) {
-      localStorage.setItem(QUICK_INPUT_TARGET_KEY, quickInputTargetId);
-    } else {
-      localStorage.removeItem(QUICK_INPUT_TARGET_KEY);
-    }
-  }, [quickInputTargetId]);
-
-  // Quick Input: Handle quick add
-  const handleQuickAdd = useCallback((text: string) => {
-    if (!quickInputTargetId) {
-      alert('请先设置快速输入的目标节点');
-      setShowQuickInputSettings(true);
-      return;
-    }
-
-    // Create new node with IDEA status
-    const newNode = createNode(text);
-    newNode.status = TaskStatus.IDEA;
-
-    // Add to target node
-    setRoot(prev => addChildNode(prev, quickInputTargetId, newNode));
-
-    // Expand target node to show the new node
-    setRoot(prev => updateNodeInTree(prev, quickInputTargetId, { isExpanded: true }));
-
-    console.log(`Quick added: "${text}" to node ${quickInputTargetId}`);
-  }, [quickInputTargetId]);
-
-  // Quick Input: Save target node setting
-  const handleSaveQuickInputTarget = useCallback((nodeId: string) => {
-    setQuickInputTargetId(nodeId);
-    console.log('Quick input target set to:', nodeId);
-  }, []);
-
   // Handle lock toggle with toast notification
   const handleToggleLock = useCallback(() => {
     const newLockState = !isLocked;
@@ -519,6 +518,11 @@ export default function App() {
     setShowLockToast(true);
     setTimeout(() => setShowLockToast(false), 2000);
   }, [isLocked]);
+
+  // Handle theme toggle
+  const handleToggleTheme = useCallback(() => {
+    setIsDarkMode(prev => !prev);
+  }, []);
 
   // Keyboard Shortcuts (Global)
   useEffect(() => {
@@ -546,16 +550,19 @@ export default function App() {
                     e.preventDefault();
                     setBaseFilter('today');
                     setPriorityFilters(new Set());
+                    setHideUnmatched(true);
                     return;
                 case '2':
                     e.preventDefault();
                     setBaseFilter('overdue');
                     setPriorityFilters(new Set());
+                    setHideUnmatched(true);
                     return;
                 case '3':
                     e.preventDefault();
                     setBaseFilter('planned');
                     setPriorityFilters(new Set());
+                    setHideUnmatched(true);
                     return;
                 case 'z':
                 case 'Z':
@@ -570,6 +577,7 @@ export default function App() {
                         }
                         return next;
                     });
+                    setHideUnmatched(true);
                     return;
                 case 'j':
                 case 'J':
@@ -584,6 +592,7 @@ export default function App() {
                         }
                         return next;
                     });
+                    setHideUnmatched(true);
                     return;
                 case 'q':
                 case 'Q':
@@ -598,6 +607,7 @@ export default function App() {
                         }
                         return next;
                     });
+                    setHideUnmatched(true);
                     return;
             }
         }
@@ -638,7 +648,7 @@ export default function App() {
 
 
   return (
-    <div className="flex h-screen w-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans">
       
       {/* Left Sidebar: Outline */}
       <SidebarLeft
@@ -651,6 +661,10 @@ export default function App() {
           setBaseFilter(filter);
           // 切换基础筛选时，清除优先级筛选
           setPriorityFilters(new Set());
+          // 如果不是"全部"筛选，自动开启"仅显示筛选结果"
+          if (filter !== 'all') {
+            setHideUnmatched(true);
+          }
         }}
         onTogglePriorityFilter={(priority) => {
           setPriorityFilters(prev => {
@@ -662,10 +676,12 @@ export default function App() {
             }
             return next;
           });
+          // 开启优先级筛选时，自动开启"仅显示筛选结果"
+          setHideUnmatched(true);
         }}
         hideUnmatched={hideUnmatched}
         onToggleHideUnmatched={() => setHideUnmatched(!hideUnmatched)}
-        onOpenQuickInputSettings={() => setShowQuickInputSettings(true)}
+        filterCounts={filterCounts}
       />
 
       {/* Center: Canvas */}
@@ -674,20 +690,20 @@ export default function App() {
         <div className="absolute top-4 right-4 z-50 flex gap-2">
             <button
                 onClick={loadFile}
-                className="flex items-center gap-2 bg-white px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 text-slate-700"
+                className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
             >
                 <FolderOpen size={16} /> 打开
             </button>
             <button
                 onClick={() => saveFile()}
-                className={`flex items-center gap-2 px-3 py-2 rounded shadow text-sm font-medium text-white transition-colors ${isDirty ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-400'}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded shadow text-sm font-medium text-white transition-colors ${isDirty ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-400 dark:bg-slate-600'}`}
             >
                 {fileHandle ? <Save size={16} /> : <Download size={16} />}
                 {fileHandle ? '保存' : '导出'}
             </button>
             <button
                 onClick={handleClearData}
-                className="flex items-center justify-center bg-white p-2 rounded shadow text-sm font-medium hover:bg-red-50 text-red-600 border border-red-200 transition-colors"
+                className="flex items-center justify-center bg-white dark:bg-slate-800 p-2 rounded shadow text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 transition-colors"
                 title="重置所有数据(需要确认)"
             >
                 <RefreshCw size={16} />
@@ -695,17 +711,17 @@ export default function App() {
         </div>
 
         {/* Status Bar */}
-        <div className="absolute bottom-4 left-4 z-50 bg-white/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-600 shadow-sm flex items-center gap-3 max-w-[600px]">
+        <div className="absolute bottom-4 left-4 z-50 bg-white/80 dark:bg-slate-800/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-600 dark:text-slate-300 shadow-sm flex items-center gap-3 max-w-[600px]">
            <div className="flex items-center gap-2">
              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
              已自动保存到浏览器
            </div>
            {fileName && (
-             <div className="flex items-center gap-1 border-l border-slate-300 pl-3">
-               <span className="text-slate-400">文件:</span>
+             <div className="flex items-center gap-1 border-l border-slate-300 dark:border-slate-600 pl-3">
+               <span className="text-slate-400 dark:text-slate-500">文件:</span>
                <button
                  onClick={() => setShowFileInfoModal(true)}
-                 className="font-medium text-slate-700 hover:text-indigo-600 truncate cursor-pointer transition-colors underline decoration-dotted underline-offset-2"
+                 className="font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 truncate cursor-pointer transition-colors underline decoration-dotted underline-offset-2"
                  title="点击查看文件详细信息"
                >
                  {fileName}
@@ -727,10 +743,19 @@ export default function App() {
           {/* Reset View Button */}
           <button
             onClick={() => resetViewRef.current?.()}
-            className="p-2 rounded-full shadow-lg transition-all hover:scale-110 bg-white hover:bg-slate-100"
+            className="p-2 rounded-full shadow-lg transition-all hover:scale-110 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
             title="重置视图到中心并适应视口"
           >
-            <Maximize2 size={20} className="text-slate-600" />
+            <Maximize2 size={20} className="text-slate-600 dark:text-slate-300" />
+          </button>
+
+          {/* Theme Toggle Button */}
+          <button
+            onClick={handleToggleTheme}
+            className="p-2 rounded-full shadow-lg transition-all hover:scale-110 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
+            title={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
+          >
+            {isDarkMode ? <Sun size={20} className="text-yellow-500" /> : <Moon size={20} className="text-slate-600" />}
           </button>
 
           {/* Lock/Unlock Button */}
@@ -773,6 +798,8 @@ export default function App() {
             newlyCreatedNodeId={newlyCreatedNodeId}
             onClearNewlyCreated={() => setNewlyCreatedNodeId(null)}
             onResetViewRef={resetViewRef}
+            baseFilter={baseFilter}
+            priorityFilters={priorityFilters}
         />
       </div>
 
@@ -792,20 +819,20 @@ export default function App() {
       {/* File Info Modal */}
       {showFileInfoModal && fileName && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50"
           onClick={() => setShowFileInfoModal(false)}
         >
           <div
-            className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 overflow-hidden"
+            className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 📄 文件信息
               </h2>
               <button
                 onClick={() => setShowFileInfoModal(false)}
-                className="p-1 hover:bg-slate-200 rounded transition-colors"
+                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-slate-700 dark:text-slate-300"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -815,20 +842,20 @@ export default function App() {
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">文件名</label>
-                <p className="text-sm text-slate-700 font-medium mt-1 break-all">{fileName}</p>
+                <label className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">文件名</label>
+                <p className="text-sm text-slate-700 dark:text-slate-200 font-medium mt-1 break-all">{fileName}</p>
               </div>
 
               {filePath && (
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">路径</label>
-                  <p className="text-sm text-slate-700 mt-1 break-all font-mono bg-slate-50 p-2 rounded">{filePath}</p>
+                  <label className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">路径</label>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 break-all font-mono bg-slate-50 dark:bg-slate-900 p-2 rounded">{filePath}</p>
                 </div>
               )}
 
               {!filePath && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
-                  <p className="text-xs text-yellow-800">
+                <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+                  <p className="text-xs text-yellow-800 dark:text-yellow-200">
                     ⚠️ 由于浏览器安全限制，无法显示完整文件系统路径。<br/>
                     文件通过 File System Access API 访问。
                   </p>
@@ -837,8 +864,8 @@ export default function App() {
 
               {lastFileModified > 0 && (
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">最后修改时间</label>
-                  <p className="text-sm text-slate-700 mt-1">
+                  <label className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">最后修改时间</label>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 mt-1">
                     {new Date(lastFileModified).toLocaleString('zh-CN', {
                       year: 'numeric',
                       month: '2-digit',
@@ -853,8 +880,8 @@ export default function App() {
 
               {fileSize > 0 && (
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">文件大小</label>
-                  <p className="text-sm text-slate-700 mt-1">
+                  <label className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">文件大小</label>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 mt-1">
                     {fileSize < 1024
                       ? `${fileSize} B`
                       : fileSize < 1024 * 1024
@@ -867,8 +894,8 @@ export default function App() {
 
               {lastSaved && (
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">最后保存时间</label>
-                  <p className="text-sm text-slate-700 mt-1">
+                  <label className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">最后保存时间</label>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 mt-1">
                     {new Date(lastSaved).toLocaleString('zh-CN', {
                       year: 'numeric',
                       month: '2-digit',
@@ -882,7 +909,7 @@ export default function App() {
               )}
             </div>
 
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end">
               <button
                 onClick={() => setShowFileInfoModal(false)}
                 className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium"
@@ -893,21 +920,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Quick Input */}
-      <QuickInput
-        onQuickAdd={handleQuickAdd}
-        onFocusChange={setIsQuickInputFocused}
-      />
-
-      {/* Quick Input Settings Modal */}
-      <QuickInputSettings
-        isOpen={showQuickInputSettings}
-        onClose={() => setShowQuickInputSettings(false)}
-        root={root}
-        currentTargetId={quickInputTargetId}
-        onSaveTarget={handleSaveQuickInputTarget}
-      />
     </div>
   );
 }

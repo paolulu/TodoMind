@@ -22,6 +22,8 @@ interface MindMapCanvasProps {
   newlyCreatedNodeId: string | null;
   onClearNewlyCreated: () => void;
   onResetViewRef?: React.MutableRefObject<(() => void) | null>;
+  baseFilter?: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus;
+  priorityFilters?: Set<'important' | 'urgent' | 'both'>;
 }
 
 // A recursive component to render the tree horizontally with orthogonal lines
@@ -332,7 +334,7 @@ const TreeNode: React.FC<{
   );
 };
 
-export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop, isLocked, newlyCreatedNodeId, onClearNewlyCreated, onResetViewRef }) => {
+export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, onSelect, onToggleExpand, filterMode, filteredIds, hideUnmatched, onUpdateNode, onAddSibling, onAddChild, onDelete, onMove, onNodeDrop, isLocked, newlyCreatedNodeId, onClearNewlyCreated, onResetViewRef, baseFilter, priorityFilters }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -531,7 +533,8 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    // Get current scale and position from state
+    // Get current scale and position from state at the time of execution
+    // We don't use the closure variables to ensure we always get the latest values
     const currentScale = scale;
     const currentPosition = position;
 
@@ -606,7 +609,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
       x: targetX,
       y: targetY
     });
-  }, [hideUnmatched, filterMode]);
+  }, [hideUnmatched, filterMode, scale, position]);
 
   // Expose handleResetView to parent component via ref
   useEffect(() => {
@@ -614,6 +617,9 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
       onResetViewRef.current = handleResetView;
     }
   }, [onResetViewRef, handleResetView]);
+
+  // Create a stable string representation of priority filters for dependency tracking
+  const priorityFiltersKey = priorityFilters ? Array.from(priorityFilters).sort().join(',') : '';
 
   // Auto-fit view when filter conditions change (not when nodes are added/deleted)
   useEffect(() => {
@@ -624,7 +630,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
     }, 100);
 
     return () => clearTimeout(timeoutId);
-  }, [filterMode, hideUnmatched, handleResetView]);
+  }, [filterMode, hideUnmatched, baseFilter, priorityFiltersKey, handleResetView]);
 
   return (
     <div

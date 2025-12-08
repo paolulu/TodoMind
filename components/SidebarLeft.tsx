@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MindNode, TaskStatus } from '../types';
-import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock, HelpCircle, FileText, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock, HelpCircle, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import { APP_VERSION } from '../version';
 import { HelpModal } from './HelpModal';
 import { ChangelogModal } from './ChangelogModal';
@@ -15,7 +15,15 @@ interface SidebarLeftProps {
   onTogglePriorityFilter: (priority: 'important' | 'urgent' | 'both') => void;
   hideUnmatched: boolean;
   onToggleHideUnmatched: () => void;
-  onOpenQuickInputSettings?: () => void;
+  filterCounts: {
+    all: number;
+    today: number;
+    overdue: number;
+    planned: number;
+    important: number;
+    urgent: number;
+    both: number;
+  };
 }
 
 const OutlineNode: React.FC<{ node: MindNode; selectedId: string | null; onSelect: (id: string) => void; depth: number }> = ({ node, selectedId, onSelect, depth }) => {
@@ -23,15 +31,15 @@ const OutlineNode: React.FC<{ node: MindNode; selectedId: string | null; onSelec
   
   return (
     <div>
-      <div 
+      <div
         className={`
           flex items-center py-1 px-2 cursor-pointer text-sm rounded
-          ${isSelected ? 'bg-indigo-100 text-indigo-700 font-medium' : 'hover:bg-slate-100 text-slate-700'}
+          ${isSelected ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-medium' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'}
         `}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => onSelect(node.id)}
       >
-        <div className={`w-2 h-2 rounded-full mr-2 ${node.children.length ? 'bg-slate-400' : 'bg-slate-200'}`}></div>
+        <div className={`w-2 h-2 rounded-full mr-2 ${node.children.length ? 'bg-slate-400 dark:bg-slate-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
         <span className="truncate">{node.text || 'Untitled'}</span>
       </div>
       {node.children.map(child => (
@@ -51,42 +59,42 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   onTogglePriorityFilter,
   hideUnmatched,
   onToggleHideUnmatched,
-  onOpenQuickInputSettings
+  filterCounts
 }) => {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showChangelogModal, setShowChangelogModal] = useState(false);
   const [isOutlineExpanded, setIsOutlineExpanded] = useState(false);
 
-  const baseFilters: { id: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus; label: string; icon: React.ReactNode; shortcut: string }[] = [
-    { id: 'all', label: '全部', icon: <LayoutList size={16} />, shortcut: '0' },
-    { id: 'today', label: '今日', icon: <Calendar size={16} />, shortcut: '1' },
-    { id: 'overdue', label: '已到期', icon: <AlertCircle size={16} className="text-orange-600" />, shortcut: '2' },
-    { id: 'planned', label: '计划中', icon: <CalendarClock size={16} className="text-blue-600" />, shortcut: '3' },
+  const baseFilters: { id: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus; label: string; icon: React.ReactNode }[] = [
+    { id: 'all', label: '全部', icon: <LayoutList size={16} /> },
+    { id: 'today', label: '今日', icon: <Calendar size={16} /> },
+    { id: 'overdue', label: '已到期', icon: <AlertCircle size={16} className="text-orange-600" /> },
+    { id: 'planned', label: '计划中', icon: <CalendarClock size={16} className="text-blue-600" /> },
   ];
 
-  const priorityFilterButtons: { id: 'important' | 'urgent' | 'both'; label: string; icon: React.ReactNode; shortcut: string }[] = [
-    { id: 'important', label: '重要', icon: <Star size={16} className="text-yellow-600" />, shortcut: 'Z' },
-    { id: 'urgent', label: '紧急', icon: <Flame size={16} className="text-red-600" />, shortcut: 'J' },
-    { id: 'both', label: '重要且紧急', icon: <span className="flex gap-0.5"><Star size={14} className="text-yellow-600" /><Flame size={14} className="text-red-600" /></span>, shortcut: 'Q' },
+  const priorityFilterButtons: { id: 'important' | 'urgent' | 'both'; label: string; icon: React.ReactNode }[] = [
+    { id: 'important', label: '重要', icon: <Star size={16} className="text-yellow-600" /> },
+    { id: 'urgent', label: '紧急', icon: <Flame size={16} className="text-red-600" /> },
+    { id: 'both', label: '重要且紧急', icon: <span className="flex gap-0.5"><Star size={14} className="text-yellow-600" /><Flame size={14} className="text-red-600" /></span> },
   ];
 
   return (
-    <div className="w-64 bg-white border-r border-slate-200 flex flex-col h-full shadow-sm z-20">
-      <div className="p-4 border-b border-slate-100">
-        <h1 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+    <div className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-sm z-20">
+      <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+        <h1 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
            🧠 TodoMind
         </h1>
-        <p className="text-xs text-slate-500 mt-1">思维导图式待办管理</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">思维导图式待办管理</p>
       </div>
 
       {/* Base Filters */}
       <div className="p-2 space-y-1">
         <div className="flex items-center justify-between px-3 py-2">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">筛选</p>
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">筛选</p>
           {(baseFilter !== 'all' || priorityFilters.size > 0) && (
             <button
               onClick={onToggleHideUnmatched}
-              className={`p-1 rounded transition-colors ${hideUnmatched ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 text-slate-400'}`}
+              className={`p-1 rounded transition-colors ${hideUnmatched ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'}`}
               title={hideUnmatched ? '显示所有节点' : '仅显示筛选结果'}
             >
               {hideUnmatched ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -98,32 +106,36 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
             key={f.id}
             onClick={() => onSetBaseFilter(f.id)}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors
-              ${baseFilter === f.id ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-600 hover:bg-slate-50'}
+              ${baseFilter === f.id ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'}
             `}
           >
             {f.icon}
             <span className="flex-1 text-left">{f.label}</span>
-            <span className="text-xs opacity-50 font-mono">({f.shortcut})</span>
+            <span className="text-xs px-1.5 py-0.5 bg-slate-200 dark:bg-slate-600 rounded font-medium">
+              {filterCounts[f.id]}
+            </span>
           </button>
         ))}
       </div>
 
       {/* Priority Filters - Multi-Select */}
       <div className="p-2 space-y-1">
-        <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">优先级（可多选）</p>
+        <p className="px-3 py-2 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">优先级（可多选）</p>
         {priorityFilterButtons.map(f => (
           <button
             key={f.id}
             onClick={() => onTogglePriorityFilter(f.id)}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors
-              ${priorityFilters.has(f.id) ? 'bg-indigo-50 text-indigo-700 font-medium border-2 border-indigo-200' : 'text-slate-600 hover:bg-slate-50 border-2 border-transparent'}
+              ${priorityFilters.has(f.id) ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium border-2 border-indigo-200 dark:border-indigo-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 border-2 border-transparent'}
             `}
           >
             {f.icon}
             <span className="flex-1 text-left">{f.label}</span>
-            <span className="text-xs opacity-50 font-mono">({f.shortcut})</span>
+            <span className="text-xs px-1.5 py-0.5 bg-slate-200 dark:bg-slate-600 rounded font-medium">
+              {filterCounts[f.id]}
+            </span>
             {priorityFilters.has(f.id) && (
-              <span className="text-indigo-600 text-xs">✓</span>
+              <span className="text-indigo-600 dark:text-indigo-400 text-xs">✓</span>
             )}
           </button>
         ))}
@@ -170,15 +182,6 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
               <span>{APP_VERSION}</span>
             </button>
           </div>
-          {onOpenQuickInputSettings && (
-            <button
-              onClick={onOpenQuickInputSettings}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
-              title="快速输入设置"
-            >
-              <Settings size={14} />
-            </button>
-          )}
         </div>
       </div>
 

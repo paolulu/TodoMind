@@ -45,8 +45,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               <h4 className="font-medium text-slate-600 mb-2">筛选快捷键（未选中节点时）</h4>
               <div className="space-y-1 text-sm text-slate-600 bg-slate-50 p-3 rounded">
                 <div className="flex justify-between"><span>全部</span><span className="font-mono bg-white px-2 py-0.5 rounded">0</span></div>
-                <div className="flex justify-between"><span>今日</span><span className="font-mono bg-white px-2 py-0.5 rounded">1</span></div>
-                <div className="flex justify-between"><span>已到期</span><span className="font-mono bg-white px-2 py-0.5 rounded">2</span></div>
+                <div className="flex justify-between"><span>已到期</span><span className="font-mono bg-white px-2 py-0.5 rounded">1</span></div>
+                <div className="flex justify-between"><span>今日</span><span className="font-mono bg-white px-2 py-0.5 rounded">2</span></div>
                 <div className="flex justify-between"><span>计划中</span><span className="font-mono bg-white px-2 py-0.5 rounded">3</span></div>
                 <div className="flex justify-between"><span>重要（切换）</span><span className="font-mono bg-white px-2 py-0.5 rounded">Z</span></div>
                 <div className="flex justify-between"><span>紧急（切换）</span><span className="font-mono bg-white px-2 py-0.5 rounded">J</span></div>

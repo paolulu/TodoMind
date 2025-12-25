@@ -670,17 +670,17 @@ export default function App() {
                     return;
                 case '1':
                     e.preventDefault();
-                    // 切换逻辑：如果当前是 today，返回 all；否则切换到 today
-                    setBaseFilter(prev => prev === 'today' ? 'all' : 'today');
-                    setPriorityFilters(new Set());
-                    setHideUnmatched(prev => baseFilter === 'today' ? prev : true);
-                    return;
-                case '2':
-                    e.preventDefault();
                     // 切换逻辑：如果当前是 overdue，返回 all；否则切换到 overdue
                     setBaseFilter(prev => prev === 'overdue' ? 'all' : 'overdue');
                     setPriorityFilters(new Set());
                     setHideUnmatched(prev => baseFilter === 'overdue' ? prev : true);
+                    return;
+                case '2':
+                    e.preventDefault();
+                    // 切换逻辑：如果当前是 today，返回 all；否则切换到 today
+                    setBaseFilter(prev => prev === 'today' ? 'all' : 'today');
+                    setPriorityFilters(new Set());
+                    setHideUnmatched(prev => baseFilter === 'today' ? prev : true);
                     return;
                 case '3':
                     e.preventDefault();

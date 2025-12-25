@@ -67,8 +67,8 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
 
   const baseFilters: { id: 'all' | 'today' | 'overdue' | 'planned' | TaskStatus; label: string; icon: React.ReactNode }[] = [
     { id: 'all', label: '全部', icon: <LayoutList size={16} /> },
-    { id: 'today', label: '今日', icon: <Calendar size={16} /> },
     { id: 'overdue', label: '已到期', icon: <AlertCircle size={16} className="text-orange-600" /> },
+    { id: 'today', label: '今日', icon: <Calendar size={16} /> },
     { id: 'planned', label: '计划中', icon: <CalendarClock size={16} className="text-blue-600" /> },
   ];
 

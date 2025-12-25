@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SidebarLeft } from './components/SidebarLeft';
 import { SidebarRight } from './components/SidebarRight';
 import { MindMapCanvas } from './components/MindMapCanvas';
+import { VersionHistoryModal } from './components/VersionHistoryModal';
 import { MindNode, FilterType, TaskStatus, FileData } from './types';
 import { createNode, findNode, updateNodeInTree, addChildNode, addSiblingNode, deleteNodeFromTree, findParent, flattenTree, matchesFilter, matchesFilterState, moveNodeInTree, moveNodeToNewParent } from './utils';
-import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock, Maximize2, Sun, Moon } from 'lucide-react';
+import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock, Maximize2, Sun, Moon, Clock, Copy, ChevronDown, Calendar } from 'lucide-react';
 import { saveFileHandle, loadFileHandle, clearFileHandle, getFileName } from './indexedDBHelper';
+import { saveVersion } from './versionManager';
 
 const INITIAL_DATA: MindNode = {
   ...createNode('运营目标'),
@@ -144,6 +146,29 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
 
           // Check if external change is newer than our last save
           if (content.lastSaved > lastSaved) {
+            // 冲突检测：保存本地和远程两个版本
+            console.log('🔄 检测到冲突，保存两个版本到历史记录');
+
+            // 保存当前本地版本为冲突备份
+            try {
+              const currentLocalData = findNode({ id: 'temp', text: '', status: TaskStatus.IDEA, isImportant: false, isUrgent: false, children: [data], isExpanded: true, createdAt: Date.now() }, 'temp');
+              if (currentLocalData) {
+                await saveVersion(data, fileName || undefined, 'conflict-local');
+                console.log('✅ 本地冲突版本已保存');
+              }
+            } catch (versionErr) {
+              console.warn('⚠️ 保存本地冲突版本失败:', versionErr);
+            }
+
+            // 保存远程版本为冲突备份
+            try {
+              await saveVersion(content.root, fileName || undefined, 'conflict-remote');
+              console.log('✅ 远程冲突版本已保存');
+            } catch (versionErr) {
+              console.warn('⚠️ 保存远程冲突版本失败:', versionErr);
+            }
+
+            // 加载远程版本
             onLoad(content.root);
             setLastFileModified(currentModified);
             setLastSaved(content.lastSaved);
@@ -153,7 +178,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
             setShowSyncNotification(true);
             setTimeout(() => setShowSyncNotification(false), 3000);
 
-            console.log('✅ Automatically reloaded file from external change');
+            console.log('✅ Automatically reloaded file from external change (冲突已记录到版本历史)');
           } else {
             // Our local version is newer, just update the timestamp
             console.log('📌 External file modified but local version is newer, keeping local changes');
@@ -225,6 +250,14 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
         }
 
         console.log('Saved successfully to:', handle.name);
+
+        // 保存版本快照
+        try {
+          await saveVersion(data, handle.name, auto ? 'auto' : 'manual');
+          console.log('✅ 版本快照已创建');
+        } catch (versionErr) {
+          console.warn('⚠️ 版本快照保存失败（不影响文件保存）:', versionErr);
+        }
       } else if (!auto) {
          // Manual save without handle (or FS API failed) -> Fallback to download
          throw new Error("No file handle");
@@ -280,7 +313,75 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
     }
   };
 
-  return { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName, filePath, fileSize, lastFileModified, showSyncNotification };
+  // 另存为功能 - 强制弹出保存对话框
+  const saveAsFile = async (suggestedName?: string) => {
+    try {
+      // @ts-ignore - File System Access API
+      const handle = await window.showSaveFilePicker({
+        types: [{ description: 'MindMap JSON', accept: { 'application/json': ['.json'] } }],
+        suggestedName: suggestedName || `mindmap-todo-${new Date().toISOString().slice(0,10)}.json`
+      });
+
+      // @ts-ignore
+      const writable = await handle.createWritable();
+      const content: FileData = { root: data, lastSaved: Date.now() };
+      await writable.write(JSON.stringify(content, null, 2));
+      await writable.close();
+
+      // 更新文件句柄和状态
+      setFileHandle(handle);
+      setFileName(handle.name);
+      setLastSaved(Date.now());
+      setIsDirty(false);
+
+      // 更新文件元数据
+      try {
+        const file = await handle.getFile();
+        setLastFileModified(file.lastModified);
+        setFileSize(file.size);
+      } catch (err) {
+        console.warn('Could not update file metadata after save:', err);
+      }
+
+      // 保存文件句柄到 IndexedDB
+      await saveFileHandle(handle);
+
+      // 保存版本快照
+      try {
+        await saveVersion(data, handle.name, 'manual');
+        console.log('✅ 版本快照已创建');
+      } catch (versionErr) {
+        console.warn('⚠️ 版本快照保存失败（不影响文件保存）:', versionErr);
+      }
+
+      console.log('Saved as new file:', handle.name);
+      return true;
+    } catch (err) {
+      console.error('Save as failed:', err);
+      if ((err as Error).name === 'AbortError') {
+        // 用户取消
+        return false;
+      }
+      // 如果 File System API 不可用，降级到下载
+      const blob = new Blob([JSON.stringify({ root: data, lastSaved: Date.now() }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = suggestedName || `mindmap-todo-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return true;
+    }
+  };
+
+  // 快速另存为今日日期文件
+  const quickSaveAsToday = async () => {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const suggestedName = `TodoMind-${today}.json`;
+    await saveAsFile(suggestedName);
+  };
+
+  return { saveFile, saveAsFile, quickSaveAsToday, loadFile, lastSaved, isDirty, fileHandle, fileName, filePath, fileSize, lastFileModified, showSyncNotification };
 };
 
 export default function App() {
@@ -297,6 +398,8 @@ export default function App() {
   const [showFileInfoModal, setShowFileInfoModal] = useState(false); // 文件信息模态框
   const [showLockToast, setShowLockToast] = useState(false); // 锁定状态提示
   const [lockToastMessage, setLockToastMessage] = useState(''); // 锁定提示消息
+  const [showVersionHistory, setShowVersionHistory] = useState(false); // 版本历史模态框
+  const [showSaveAsMenu, setShowSaveAsMenu] = useState(false); // 另存为下拉菜单
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem(THEME_KEY);
@@ -338,7 +441,7 @@ export default function App() {
   }, [root]);
 
   // Load persistence logic
-  const { saveFile, loadFile, lastSaved, isDirty, fileHandle, fileName, filePath, fileSize, lastFileModified, showSyncNotification } = useFileSystem(root, (newRoot) => {
+  const { saveFile, saveAsFile, quickSaveAsToday, loadFile, lastSaved, isDirty, fileHandle, fileName, filePath, fileSize, lastFileModified, showSyncNotification } = useFileSystem(root, (newRoot) => {
     setRoot(newRoot);
     setSelectedId(newRoot.id);
   });
@@ -524,6 +627,25 @@ export default function App() {
     setIsDarkMode(prev => !prev);
   }, []);
 
+  // Handle version restore
+  const handleRestoreVersion = useCallback(async (versionData: MindNode) => {
+    try {
+      // 先保存当前状态为版本（以防恢复后想回到当前状态）
+      await saveVersion(root, fileName || undefined, 'manual');
+      console.log('✅ 恢复前已保存当前状态');
+
+      // 恢复版本数据
+      setRoot(versionData);
+      setSelectedId(versionData.id);
+
+      console.log('✅ 版本已恢复');
+      alert('版本已恢复！当前状态已保存到版本历史中。');
+    } catch (error) {
+      console.error('❌ 恢复版本失败:', error);
+      alert('恢复版本失败，请查看控制台了解详情');
+    }
+  }, [root, fileName]);
+
   // Keyboard Shortcuts (Global)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -703,6 +825,70 @@ export default function App() {
             >
                 {fileHandle ? <Save size={16} /> : <Download size={16} />}
                 {fileHandle ? '保存' : '导出'}
+            </button>
+
+            {/* 另存为按钮（带下拉菜单） */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSaveAsMenu(!showSaveAsMenu)}
+                className="flex items-center gap-1 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                title="另存为"
+              >
+                <Copy size={16} />
+                另存为
+                <ChevronDown size={14} />
+              </button>
+
+              {/* 下拉菜单 */}
+              {showSaveAsMenu && (
+                <>
+                  {/* 点击外部关闭菜单 */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowSaveAsMenu(false)}
+                  />
+
+                  <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
+                    <button
+                      onClick={() => {
+                        saveAsFile();
+                        setShowSaveAsMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
+                    >
+                      <Copy size={16} />
+                      <div>
+                        <div className="font-medium">另存为...</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">自定义文件名</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        quickSaveAsToday();
+                        setShowSaveAsMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left border-t border-slate-200 dark:border-slate-700"
+                    >
+                      <Calendar size={16} />
+                      <div>
+                        <div className="font-medium">保存为今日</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          TodoMind-{new Date().toISOString().slice(0, 10)}.json
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button
+                onClick={() => setShowVersionHistory(true)}
+                className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                title="查看版本历史"
+            >
+                <Clock size={16} /> 历史
             </button>
             <button
                 onClick={handleClearData}
@@ -923,6 +1109,13 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Version History Modal */}
+      <VersionHistoryModal
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        onRestore={handleRestoreVersion}
+      />
     </div>
   );
 }

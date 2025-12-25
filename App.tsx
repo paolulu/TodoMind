@@ -548,21 +548,24 @@ export default function App() {
                     return;
                 case '1':
                     e.preventDefault();
-                    setBaseFilter('today');
+                    // 切换逻辑：如果当前是 today，返回 all；否则切换到 today
+                    setBaseFilter(prev => prev === 'today' ? 'all' : 'today');
                     setPriorityFilters(new Set());
-                    setHideUnmatched(true);
+                    setHideUnmatched(prev => baseFilter === 'today' ? prev : true);
                     return;
                 case '2':
                     e.preventDefault();
-                    setBaseFilter('overdue');
+                    // 切换逻辑：如果当前是 overdue，返回 all；否则切换到 overdue
+                    setBaseFilter(prev => prev === 'overdue' ? 'all' : 'overdue');
                     setPriorityFilters(new Set());
-                    setHideUnmatched(true);
+                    setHideUnmatched(prev => baseFilter === 'overdue' ? prev : true);
                     return;
                 case '3':
                     e.preventDefault();
-                    setBaseFilter('planned');
+                    // 切换逻辑：如果当前是 planned，返回 all；否则切换到 planned
+                    setBaseFilter(prev => prev === 'planned' ? 'all' : 'planned');
                     setPriorityFilters(new Set());
-                    setHideUnmatched(true);
+                    setHideUnmatched(prev => baseFilter === 'planned' ? prev : true);
                     return;
                 case 'z':
                 case 'Z':

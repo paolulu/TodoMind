@@ -62,6 +62,16 @@ const TreeNode: React.FC<{
   const isNewlyCreated = node.id === newlyCreatedNodeId;
   const [isComposing, setIsComposing] = useState(false); // 跟踪输入法组合状态
 
+  // Local state for text to prevent history spam
+  const [localText, setLocalText] = useState(node.text);
+
+  // Sync local text when node changes (but not during editing)
+  useEffect(() => {
+    if (!isEditing) {
+      setLocalText(node.text);
+    }
+  }, [node.text, isEditing]);
+
   const opacityClass = filterActive && !isFilteredMatch ? 'opacity-30 grayscale' : 'opacity-100';
 
   // Auto-focus input when entering edit mode
@@ -100,22 +110,22 @@ const TreeNode: React.FC<{
 
     // Shortcuts inside the edit input
     if (e.key === 'Enter') {
-        e.preventDefault();
-        setIsEditing(false);
-        onAddSibling();
+      e.preventDefault();
+      setIsEditing(false);
+      onAddSibling();
     } else if (e.key === 'Tab') {
-        e.preventDefault();
-        setIsEditing(false);
-        onAddChild();
+      e.preventDefault();
+      setIsEditing(false);
+      onAddChild();
     } else if (e.key === 'Delete' && e.ctrlKey) {
-        // Ctrl+Delete to delete node while editing
-        e.preventDefault();
-        onDelete();
+      // Ctrl+Delete to delete node while editing
+      e.preventDefault();
+      onDelete();
     } else if (e.key === 'Escape') {
-        // Escape to exit edit mode
-        e.preventDefault();
-        setIsEditing(false);
-        inputRef.current?.blur();
+      // Escape to exit edit mode
+      e.preventDefault();
+      setIsEditing(false);
+      inputRef.current?.blur();
     }
   };
 
@@ -159,97 +169,103 @@ const TreeNode: React.FC<{
               min-w-[120px] max-w-[400px]
             `}
           >
-          {/* Drag Handle - Only show for non-root nodes */}
-          {!isRoot && (
-            <div className="absolute -left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
-              <GripVertical size={16} className="text-slate-400" />
-            </div>
-          )}
-
-          {/* Priority Badges - Show important and urgent badges */}
-          <div className="absolute -top-2 -left-2 flex gap-1">
-            {node.isImportant && (
-              <div className={`bg-white rounded-full p-0.5 shadow-sm border ${PRIORITY_BADGE_CONFIG.important.color}`}>
-                {PRIORITY_BADGE_CONFIG.important.icon}
+            {/* Drag Handle - Only show for non-root nodes */}
+            {!isRoot && (
+              <div className="absolute -left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                <GripVertical size={16} className="text-slate-400" />
               </div>
             )}
-            {node.isUrgent && (
-              <div className={`bg-white rounded-full p-0.5 shadow-sm border ${PRIORITY_BADGE_CONFIG.urgent.color}`}>
-                {PRIORITY_BADGE_CONFIG.urgent.icon}
-              </div>
-            )}
-          </div>
 
-          {/* Checkbox for non-IDEA status */}
-          {node.status !== TaskStatus.IDEA && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (node.status === TaskStatus.DONE) {
-                  // If already done, revert to previous status (TODO)
-                  onUpdateNode(node.id, { status: TaskStatus.TODO });
-                } else {
-                  // Mark as done
-                  onUpdateNode(node.id, { status: TaskStatus.DONE });
-                }
-              }}
-              className="flex-shrink-0 hover:scale-110 transition-transform"
-            >
-              {node.status === TaskStatus.DONE ? (
-                <CheckSquare size={18} className="text-slate-400" />
-              ) : (
-                <Square size={18} className="text-slate-400" />
+            {/* Priority Badges - Show important and urgent badges */}
+            <div className="absolute -top-2 -left-2 flex gap-1">
+              {node.isImportant && (
+                <div className={`bg-white rounded-full p-0.5 shadow-sm border ${PRIORITY_BADGE_CONFIG.important.color}`}>
+                  {PRIORITY_BADGE_CONFIG.important.icon}
+                </div>
               )}
-            </button>
-          )}
+              {node.isUrgent && (
+                <div className={`bg-white rounded-full p-0.5 shadow-sm border ${PRIORITY_BADGE_CONFIG.urgent.color}`}>
+                  {PRIORITY_BADGE_CONFIG.urgent.icon}
+                </div>
+              )}
+            </div>
 
-          <div className="flex flex-col w-full min-w-0">
-            {/* Auto-growing Input Container */}
-            <div className="relative min-w-[80px]">
+            {/* Checkbox for non-IDEA status */}
+            {node.status !== TaskStatus.IDEA && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (node.status === TaskStatus.DONE) {
+                    // If already done, revert to previous status (TODO)
+                    onUpdateNode(node.id, { status: TaskStatus.TODO });
+                  } else {
+                    // Mark as done
+                    onUpdateNode(node.id, { status: TaskStatus.DONE });
+                  }
+                }}
+                className="flex-shrink-0 hover:scale-110 transition-transform"
+              >
+                {node.status === TaskStatus.DONE ? (
+                  <CheckSquare size={18} className="text-slate-400" />
+                ) : (
+                  <Square size={18} className="text-slate-400" />
+                )}
+              </button>
+            )}
+
+            <div className="flex flex-col w-full min-w-0">
+              {/* Auto-growing Input Container */}
+              <div className="relative min-w-[80px]">
                 {/* Invisible Span to determine width */}
                 <span className="invisible whitespace-pre font-medium text-sm px-1">
-                    {node.text || '输入任务...'}
+                  {node.text || '输入任务...'}
                 </span>
 
                 {isEditing && !isLocked ? (
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={node.text}
-                        onChange={(e) => onUpdateNode(node.id, { text: e.target.value })}
-                        onKeyDown={handleKeyDown}
-                        onBlur={() => setIsEditing(false)}
-                        onCompositionStart={() => setIsComposing(true)}
-                        onCompositionEnd={() => setIsComposing(false)}
-                        className={`absolute inset-0 w-full bg-transparent border-none outline-none font-medium text-sm p-0 m-0 text-inherit placeholder-slate-400/70 px-1 ${node.status === TaskStatus.DONE ? 'line-through' : ''}`}
-                        placeholder="输入任务..."
-                    />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={localText}
+                    onChange={(e) => setLocalText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={() => {
+                      setIsEditing(false);
+                      // Only update if text actually changed
+                      if (localText !== node.text) {
+                        onUpdateNode(node.id, { text: localText });
+                      }
+                    }}
+                    onCompositionStart={() => setIsComposing(true)}
+                    onCompositionEnd={() => setIsComposing(false)}
+                    className={`absolute inset-0 w-full bg-transparent border-none outline-none font-medium text-sm p-0 m-0 text-inherit placeholder-slate-400/70 px-1 ${node.status === TaskStatus.DONE ? 'line-through' : ''}`}
+                    placeholder="输入任务..."
+                  />
                 ) : (
-                    <span className={`absolute inset-0 font-medium text-sm select-none px-1 overflow-hidden text-ellipsis whitespace-nowrap ${node.status === TaskStatus.DONE ? 'line-through' : ''}`}>
-                        {node.text || ''}
-                    </span>
+                  <span className={`absolute inset-0 font-medium text-sm select-none px-1 overflow-hidden text-ellipsis whitespace-nowrap ${node.status === TaskStatus.DONE ? 'line-through' : ''}`}>
+                    {node.text || ''}
+                  </span>
                 )}
+              </div>
+
+              {node.dueDate && (
+                <span className="text-[10px] opacity-70 flex items-center gap-1 px-1 mt-0.5">
+                  📅 {node.dueDate}
+                </span>
+              )}
             </div>
 
-            {node.dueDate && (
-              <span className="text-[10px] opacity-70 flex items-center gap-1 px-1 mt-0.5">
-                📅 {node.dueDate}
-              </span>
+            {/* Expander Toggle */}
+            {node.children.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleExpand(node.id, !node.isExpanded);
+                }}
+                className="ml-2 p-1 hover:bg-black/10 rounded-full"
+              >
+                {node.isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
             )}
-          </div>
-
-          {/* Expander Toggle */}
-          {node.children.length > 0 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleExpand(node.id, !node.isExpanded);
-              }}
-              className="ml-2 p-1 hover:bg-black/10 rounded-full"
-            >
-              {node.isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
-          )}
           </div>
         </div>
       </div>
@@ -266,67 +282,67 @@ const TreeNode: React.FC<{
 
         return (
           <div className="flex flex-row items-center">
-             {/* 1. Horizontal Link leaving the parent node */}
-             <div className="w-8 h-0.5 bg-slate-300"></div>
+            {/* 1. Horizontal Link leaving the parent node */}
+            <div className="w-8 h-0.5 bg-slate-300"></div>
 
-             {/* 2. Container for children */}
-             <div className="flex flex-col">
-               {visibleChildren.map((child, index) => {
-                  const isFirst = index === 0;
-                  const isLast = index === visibleChildren.length - 1;
-                  const isSingle = visibleChildren.length === 1;
+            {/* 2. Container for children */}
+            <div className="flex flex-col">
+              {visibleChildren.map((child, index) => {
+                const isFirst = index === 0;
+                const isLast = index === visibleChildren.length - 1;
+                const isSingle = visibleChildren.length === 1;
 
-                  return (
-                     <div key={child.id} className="flex flex-row items-center relative">
-                         {/* Vertical Line Segment (The Spine) */}
-                         {/* Only needed if more than 1 child to connect them vertically */}
-                         {!isSingle && (
-                            <div
-                               className="absolute left-0 w-0.5 bg-slate-300"
-                               style={{
-                                  // First child: starts at center (50%), goes down.
-                                  // Last child: starts at top (0), goes to center (50%).
-                                  // Middle child: goes full height (0 to 100%).
-                                  top: isFirst ? '50%' : '0',
-                                  height: isFirst || isLast ? '50%' : '100%'
-                               }}
-                            />
-                         )}
+                return (
+                  <div key={child.id} className="flex flex-row items-center relative">
+                    {/* Vertical Line Segment (The Spine) */}
+                    {/* Only needed if more than 1 child to connect them vertically */}
+                    {!isSingle && (
+                      <div
+                        className="absolute left-0 w-0.5 bg-slate-300"
+                        style={{
+                          // First child: starts at center (50%), goes down.
+                          // Last child: starts at top (0), goes to center (50%).
+                          // Middle child: goes full height (0 to 100%).
+                          top: isFirst ? '50%' : '0',
+                          height: isFirst || isLast ? '50%' : '100%'
+                        }}
+                      />
+                    )}
 
-                         {/* Connector from Spine to Child */}
-                         <div className="w-8 h-0.5 bg-slate-300"></div>
+                    {/* Connector from Spine to Child */}
+                    <div className="w-8 h-0.5 bg-slate-300"></div>
 
-                         {/* Recursive Child Node */}
-                         <TreeNode
-                            node={child}
-                            selectedId={selectedId}
-                            onSelect={onSelect}
-                            onToggleExpand={onToggleExpand}
-                            filteredIds={filteredIds}
-                            isFilteredMatch={filteredIds.has(child.id)}
-                            filterActive={filterActive}
-                            hideUnmatched={hideUnmatched}
-                            onUpdateNode={onUpdateNode}
-                            onAddSibling={onAddSibling}
-                            onAddChild={onAddChild}
-                            onDelete={onDelete}
-                            onMove={onMove}
-                            onDragStart={onDragStart}
-                            onDragOver={onDragOver}
-                            onDrop={onDrop}
-                            onDragEnd={onDragEnd}
-                            dragOverNodeId={dragOverNodeId}
-                            draggedNodeId={draggedNodeId}
-                            isRoot={false}
-                            isLocked={isLocked}
-                            onShowContextMenu={onShowContextMenu}
-                            newlyCreatedNodeId={newlyCreatedNodeId}
-                            onClearNewlyCreated={onClearNewlyCreated}
-                         />
-                     </div>
-                  );
-               })}
-             </div>
+                    {/* Recursive Child Node */}
+                    <TreeNode
+                      node={child}
+                      selectedId={selectedId}
+                      onSelect={onSelect}
+                      onToggleExpand={onToggleExpand}
+                      filteredIds={filteredIds}
+                      isFilteredMatch={filteredIds.has(child.id)}
+                      filterActive={filterActive}
+                      hideUnmatched={hideUnmatched}
+                      onUpdateNode={onUpdateNode}
+                      onAddSibling={onAddSibling}
+                      onAddChild={onAddChild}
+                      onDelete={onDelete}
+                      onMove={onMove}
+                      onDragStart={onDragStart}
+                      onDragOver={onDragOver}
+                      onDrop={onDrop}
+                      onDragEnd={onDragEnd}
+                      dragOverNodeId={dragOverNodeId}
+                      draggedNodeId={draggedNodeId}
+                      isRoot={false}
+                      isLocked={isLocked}
+                      onShowContextMenu={onShowContextMenu}
+                      newlyCreatedNodeId={newlyCreatedNodeId}
+                      onClearNewlyCreated={onClearNewlyCreated}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       })()}
@@ -396,21 +412,21 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({ root, selectedId, 
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-     // Check for Right Click (button 2) for dragging
-     if (e.button === 2) {
-         isDragging.current = true;
-         lastPos.current = { x: e.clientX, y: e.clientY };
-         if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
-     }
-     // Check for Left Click (button 0) on background to deselect
-     // Check if click target is the container or the transformed content wrapper (not a node)
-     else if (e.button === 0) {
-         const target = e.target as HTMLElement;
-         // If clicked on container or the transformed wrapper div, deselect
-         if (target === containerRef.current || target.classList.contains('canvas-content-wrapper')) {
-             onSelect(null);
-         }
-     }
+    // Check for Right Click (button 2) for dragging
+    if (e.button === 2) {
+      isDragging.current = true;
+      lastPos.current = { x: e.clientX, y: e.clientY };
+      if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
+    }
+    // Check for Left Click (button 0) on background to deselect
+    // Check if click target is the container or the transformed content wrapper (not a node)
+    else if (e.button === 0) {
+      const target = e.target as HTMLElement;
+      // If clicked on container or the transformed wrapper div, deselect
+      if (target === containerRef.current || target.classList.contains('canvas-content-wrapper')) {
+        onSelect(null);
+      }
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {

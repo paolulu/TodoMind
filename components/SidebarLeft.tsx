@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
 import { MindNode, TaskStatus } from '../types';
-import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock, HelpCircle, FileText, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, Star, LayoutList, Flame, Eye, EyeOff, AlertCircle, CalendarClock, HelpCircle, FileText, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { APP_VERSION } from '../version';
 import { HelpModal } from './HelpModal';
 import { ChangelogModal } from './ChangelogModal';
+import { AiAdvisor } from './AiAdvisor';
 
 interface SidebarLeftProps {
   root: MindNode;
@@ -15,6 +17,8 @@ interface SidebarLeftProps {
   onTogglePriorityFilter: (priority: 'important' | 'urgent' | 'both') => void;
   hideUnmatched: boolean;
   onToggleHideUnmatched: () => void;
+  onOpenSettings: () => void;
+  onUpdateStatus: (nodeId: string, status: TaskStatus) => void;
   filterCounts: {
     all: number;
     today: number;
@@ -28,7 +32,7 @@ interface SidebarLeftProps {
 
 const OutlineNode: React.FC<{ node: MindNode; selectedId: string | null; onSelect: (id: string) => void; depth: number }> = ({ node, selectedId, onSelect, depth }) => {
   const isSelected = selectedId === node.id;
-  
+
   return (
     <div>
       <div
@@ -59,6 +63,8 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   onTogglePriorityFilter,
   hideUnmatched,
   onToggleHideUnmatched,
+  onOpenSettings,
+  onUpdateStatus,
   filterCounts
 }) => {
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -82,9 +88,19 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
     <div className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-sm z-20">
       <div className="p-4 border-b border-slate-100 dark:border-slate-700">
         <h1 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
-           🧠 TodoMind
+          🧠 TodoMind
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">思维导图式待办管理</p>
+      </div>
+
+      {/* AI Advisor - Prominently placed at top */}
+      <div className="p-3 pb-0">
+        <AiAdvisor
+          root={root}
+          onSelectNode={onSelect}
+          onOpenSettings={onOpenSettings}
+          onUpdateStatus={onUpdateStatus}
+        />
       </div>
 
       {/* Base Filters */}
@@ -160,13 +176,22 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       {/* Spacer to push footer to bottom */}
       <div className="flex-1"></div>
 
-      {/* Footer with Help and Version */}
-      <div className="p-3 border-t border-slate-100 bg-slate-50">
+      {/* Footer with Help, Settings and Version */}
+      <div className="p-3 border-t border-slate-100 bg-slate-50 dark:bg-slate-800 dark:border-slate-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white dark:hover:bg-slate-700"
+              title="设置 (API Key)"
+            >
+              <Settings size={14} />
+              <span>设置</span>
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
               onClick={() => setShowHelpModal(true)}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white dark:hover:bg-slate-700"
               title="使用说明"
             >
               <HelpCircle size={14} />
@@ -175,7 +200,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
             <span className="text-slate-300">|</span>
             <button
               onClick={() => setShowChangelogModal(true)}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white"
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors px-2 py-1 rounded hover:bg-white dark:hover:bg-slate-700"
               title="版本更新日志"
             >
               <FileText size={14} />

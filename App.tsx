@@ -3,6 +3,7 @@ import { SidebarLeft } from './components/SidebarLeft';
 import { SidebarRight } from './components/SidebarRight';
 import { MindMapCanvas } from './components/MindMapCanvas';
 import { VersionHistoryModal } from './components/VersionHistoryModal';
+import { SettingsModal } from './components/SettingsModal';
 import { MindNode, FilterType, TaskStatus, FileData } from './types';
 import { createNode, findNode, updateNodeInTree, addChildNode, addSiblingNode, deleteNodeFromTree, findParent, flattenTree, matchesFilter, matchesFilterState, moveNodeInTree, moveNodeToNewParent } from './utils';
 import { Save, FolderOpen, Download, RefreshCw, Lock, Unlock, Maximize2, Sun, Moon, Clock, Copy, ChevronDown, Calendar } from 'lucide-react';
@@ -209,25 +210,25 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
       let handle = fileHandle;
       if (!handle && !auto) {
         try {
-            // @ts-ignore - File System Access API
-            handle = await window.showSaveFilePicker({
+          // @ts-ignore - File System Access API
+          handle = await window.showSaveFilePicker({
             types: [{ description: 'MindMap JSON', accept: { 'application/json': ['.json'] } }],
-            });
-            setFileHandle(handle);
-            setFileName(handle.name);
+          });
+          setFileHandle(handle);
+          setFileName(handle.name);
 
-            // Get and set file path
-            const path = await getFilePath(handle);
-            setFilePath(path);
+          // Get and set file path
+          const path = await getFilePath(handle);
+          setFilePath(path);
 
-            // Save handle to IndexedDB for persistence
-            console.log('💾 Saving file handle to IndexedDB:', handle.name);
-            await saveFileHandle(handle);
+          // Save handle to IndexedDB for persistence
+          console.log('💾 Saving file handle to IndexedDB:', handle.name);
+          await saveFileHandle(handle);
         } catch (pickerErr) {
-            // If user cancelled, just return
-            if ((pickerErr as Error).name === 'AbortError') return;
-            // If security error (cross-origin), throw to trigger fallback
-            throw pickerErr;
+          // If user cancelled, just return
+          if ((pickerErr as Error).name === 'AbortError') return;
+          // If security error (cross-origin), throw to trigger fallback
+          throw pickerErr;
         }
       }
 
@@ -259,22 +260,22 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
           console.warn('⚠️ 版本快照保存失败（不影响文件保存）:', versionErr);
         }
       } else if (!auto) {
-         // Manual save without handle (or FS API failed) -> Fallback to download
-         throw new Error("No file handle");
+        // Manual save without handle (or FS API failed) -> Fallback to download
+        throw new Error("No file handle");
       }
     } catch (err) {
       console.warn('File System API unavailable or failed, falling back to download.', err);
       // Fallback for browsers without File System Access API or restricted iframe
       if (!auto) {
-         const blob = new Blob([JSON.stringify({ root: data, lastSaved: Date.now() }, null, 2)], { type: 'application/json' });
-         const url = URL.createObjectURL(blob);
-         const a = document.createElement('a');
-         a.href = url;
-         a.download = `mindmap-todo-${new Date().toISOString().slice(0,10)}.json`;
-         a.click();
-         URL.revokeObjectURL(url);
-         setLastSaved(Date.now());
-         setIsDirty(false);
+        const blob = new Blob([JSON.stringify({ root: data, lastSaved: Date.now() }, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mindmap-todo-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setLastSaved(Date.now());
+        setIsDirty(false);
       }
     }
   };
@@ -308,7 +309,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
       // If native picker fails, we could implement a file input fallback,
       // but for now we assume modern browser or just log error.
       if ((err as Error).name !== 'AbortError') {
-          alert("Could not open file picker. Please try dragging a file (not implemented yet) or ensure browser permissions.");
+        alert("Could not open file picker. Please try dragging a file (not implemented yet) or ensure browser permissions.");
       }
     }
   };
@@ -319,7 +320,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
       // @ts-ignore - File System Access API
       const handle = await window.showSaveFilePicker({
         types: [{ description: 'MindMap JSON', accept: { 'application/json': ['.json'] } }],
-        suggestedName: suggestedName || `mindmap-todo-${new Date().toISOString().slice(0,10)}.json`
+        suggestedName: suggestedName || `mindmap-todo-${new Date().toISOString().slice(0, 10)}.json`
       });
 
       // @ts-ignore
@@ -367,7 +368,7 @@ const useFileSystem = (data: MindNode, onLoad: (data: MindNode) => void) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = suggestedName || `mindmap-todo-${new Date().toISOString().slice(0,10)}.json`;
+      a.download = suggestedName || `mindmap-todo-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       return true;
@@ -400,6 +401,7 @@ export default function App() {
   const [lockToastMessage, setLockToastMessage] = useState(''); // 锁定提示消息
   const [showVersionHistory, setShowVersionHistory] = useState(false); // 版本历史模态框
   const [showSaveAsMenu, setShowSaveAsMenu] = useState(false); // 另存为下拉菜单
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // AI Settings modal
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem(THEME_KEY);
@@ -453,17 +455,17 @@ export default function App() {
   useEffect(() => {
     const prevId = prevSelectedIdRef.current;
     if (prevId && prevId !== selectedId) {
-        setRoot(currentRoot => {
-             // Find the previous node
-             const prevNode = findNode(currentRoot, prevId);
-             
-             // Check if it exists, is not root, is empty, and has no children
-             // We use trim() to treat whitespace as empty
-             if (prevNode && prevNode.id !== currentRoot.id && (!prevNode.text || prevNode.text.trim() === '') && prevNode.children.length === 0) {
-                 return deleteNodeFromTree(currentRoot, prevId);
-             }
-             return currentRoot;
-        });
+      setRoot(currentRoot => {
+        // Find the previous node
+        const prevNode = findNode(currentRoot, prevId);
+
+        // Check if it exists, is not root, is empty, and has no children
+        // We use trim() to treat whitespace as empty
+        if (prevNode && prevNode.id !== currentRoot.id && (!prevNode.text || prevNode.text.trim() === '') && prevNode.children.length === 0) {
+          return deleteNodeFromTree(currentRoot, prevId);
+        }
+        return currentRoot;
+      });
     }
     prevSelectedIdRef.current = selectedId;
   }, [selectedId]);
@@ -507,7 +509,7 @@ export default function App() {
         matches.add(node.id);
         // Also add all ancestors to ensure visibility
         let curr = findParent(root, node.id);
-        while(curr) {
+        while (curr) {
           matches.add(curr.id);
           curr = findParent(root, curr.id);
         }
@@ -519,12 +521,81 @@ export default function App() {
   // Actions
   const handleUpdateNode = useCallback((updates: Partial<MindNode>) => {
     if (!selectedId) return;
-    setRoot(prev => updateNodeInTree(prev, selectedId, updates));
+
+    setRoot(prevRoot => {
+      const currentNode = findNode(prevRoot, selectedId);
+      if (!currentNode) return prevRoot;
+
+      const timestamp = Date.now();
+      const historyItems: any[] = [];
+
+      // Fields to track in history
+      const trackableFields = ['status', 'isImportant', 'isUrgent', 'dueDate', 'text', 'note'];
+
+      trackableFields.forEach(field => {
+        if (field in updates) {
+          const key = field as keyof MindNode;
+          const newVal = updates[key];
+          const oldVal = currentNode[key];
+
+          if (newVal !== oldVal) {
+            historyItems.push({
+              timestamp,
+              field,
+              oldValue: String(oldVal),
+              newValue: String(newVal)
+            });
+          }
+        }
+      });
+
+      // Special handling for text/note: verify they actually changed, but don't spam history
+      // We update 'updatedAt' for any change, but 'history' only for trackable fields
+      const effectiveUpdates = {
+        ...updates,
+        updatedAt: timestamp,
+        history: [...(currentNode.history || []), ...historyItems]
+      };
+
+      return updateNodeInTree(prevRoot, selectedId, effectiveUpdates);
+    });
   }, [selectedId]);
-  
+
   // Specific handler for Canvas updates (passing ID explicitly)
   const handleUpdateNodeById = useCallback((id: string, updates: Partial<MindNode>) => {
-    setRoot(prev => updateNodeInTree(prev, id, updates));
+    setRoot(prevRoot => {
+      const currentNode = findNode(prevRoot, id);
+      if (!currentNode) return prevRoot;
+
+      const timestamp = Date.now();
+      const historyItems: any[] = [];
+      const trackableFields = ['status', 'isImportant', 'isUrgent', 'dueDate', 'text', 'note'];
+
+      trackableFields.forEach(field => {
+        if (field in updates) {
+          const key = field as keyof MindNode;
+          const newVal = updates[key];
+          const oldVal = currentNode[key];
+
+          if (newVal !== oldVal) {
+            historyItems.push({
+              timestamp,
+              field,
+              oldValue: String(oldVal),
+              newValue: String(newVal)
+            });
+          }
+        }
+      });
+
+      const effectiveUpdates = {
+        ...updates,
+        updatedAt: timestamp,
+        history: [...(currentNode.history || []), ...historyItems]
+      };
+
+      return updateNodeInTree(prevRoot, id, effectiveUpdates);
+    });
   }, []);
 
   const handleToggleExpand = useCallback((id: string, expanded: boolean) => {
@@ -539,40 +610,40 @@ export default function App() {
     setNewlyCreatedNodeId(newNode.id); // 标记为新创建的节点
     // Auto expand parent and select new child
     setTimeout(() => {
-        handleToggleExpand(selectedId, true);
-        setSelectedId(newNode.id);
+      handleToggleExpand(selectedId, true);
+      setSelectedId(newNode.id);
     }, 50);
   }, [selectedId, handleToggleExpand]);
 
   const handleAddSibling = useCallback(() => {
-     if (!selectedId || selectedId === root.id) return; // Cannot add sibling to root
+    if (!selectedId || selectedId === root.id) return; // Cannot add sibling to root
 
-     // Prevent adding sibling if current node is empty
-     const currentNode = findNode(root, selectedId);
-     if (currentNode && (!currentNode.text || currentNode.text.trim() === '')) {
-         return;
-     }
+    // Prevent adding sibling if current node is empty
+    const currentNode = findNode(root, selectedId);
+    if (currentNode && (!currentNode.text || currentNode.text.trim() === '')) {
+      return;
+    }
 
-     const parent = findParent(root, selectedId);
-     if (parent) {
-         const newNode = createNode(''); // Empty text
-         setRoot(prev => addSiblingNode(prev, selectedId, newNode));
-         setNewlyCreatedNodeId(newNode.id); // 标记为新创建的节点
-         setTimeout(() => setSelectedId(newNode.id), 50);
-     }
+    const parent = findParent(root, selectedId);
+    if (parent) {
+      const newNode = createNode(''); // Empty text
+      setRoot(prev => addSiblingNode(prev, selectedId, newNode));
+      setNewlyCreatedNodeId(newNode.id); // 标记为新创建的节点
+      setTimeout(() => setSelectedId(newNode.id), 50);
+    }
   }, [selectedId, root]);
 
   const handleDelete = useCallback(() => {
     if (!selectedId || selectedId === root.id) return;
     const nodeToDelete = findNode(root, selectedId);
     if (!nodeToDelete) return;
-    
+
     if (nodeToDelete.children.length > 0) {
-        if (!confirm(`Delete "${nodeToDelete.text || 'Untitled'}" and its ${nodeToDelete.children.length} children?`)) {
-            return;
-        }
+      if (!confirm(`Delete "${nodeToDelete.text || 'Untitled'}" and its ${nodeToDelete.children.length} children?`)) {
+        return;
+      }
     }
-    
+
     const parent = findParent(root, selectedId);
     setRoot(prev => deleteNodeFromTree(prev, selectedId));
     if (parent) setSelectedId(parent.id);
@@ -580,17 +651,17 @@ export default function App() {
   }, [selectedId, root]);
 
   const handleMove = useCallback((direction: 'up' | 'down') => {
-      if (!selectedId || selectedId === root.id) return;
-      const parent = findParent(root, selectedId);
-      if (parent) {
-          setRoot(prev => moveNodeInTree(prev, selectedId, direction));
-      }
+    if (!selectedId || selectedId === root.id) return;
+    const parent = findParent(root, selectedId);
+    if (parent) {
+      setRoot(prev => moveNodeInTree(prev, selectedId, direction));
+    }
   }, [selectedId, root]);
 
   // Drag and drop handler
   const handleNodeDrop = useCallback((draggedNodeId: string, targetNodeId: string, insertIndex?: number) => {
-      if (draggedNodeId === root.id) return; // Cannot drag root
-      setRoot(prev => moveNodeToNewParent(prev, draggedNodeId, targetNodeId, insertIndex));
+    if (draggedNodeId === root.id) return; // Cannot drag root
+    setRoot(prev => moveNodeToNewParent(prev, draggedNodeId, targetNodeId, insertIndex));
   }, [root.id]);
 
   // Clear all data and reset to initial
@@ -649,123 +720,123 @@ export default function App() {
   // Keyboard Shortcuts (Global)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-            return;
-        }
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
 
-        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        saveFile();
+        return;
+      }
+
+      // 筛选快捷键 - 只在没有选中节点时生效
+      if (!selectedId) {
+        switch (e.key) {
+          case '0':
             e.preventDefault();
-            saveFile();
+            setBaseFilter('all');
+            setPriorityFilters(new Set());
+            return;
+          case '1':
+            e.preventDefault();
+            // 切换逻辑：如果当前是 overdue，返回 all；否则切换到 overdue
+            setBaseFilter(prev => prev === 'overdue' ? 'all' : 'overdue');
+            setPriorityFilters(new Set());
+            setHideUnmatched(prev => baseFilter === 'overdue' ? prev : true);
+            return;
+          case '2':
+            e.preventDefault();
+            // 切换逻辑：如果当前是 today，返回 all；否则切换到 today
+            setBaseFilter(prev => prev === 'today' ? 'all' : 'today');
+            setPriorityFilters(new Set());
+            setHideUnmatched(prev => baseFilter === 'today' ? prev : true);
+            return;
+          case '3':
+            e.preventDefault();
+            // 切换逻辑：如果当前是 planned，返回 all；否则切换到 planned
+            setBaseFilter(prev => prev === 'planned' ? 'all' : 'planned');
+            setPriorityFilters(new Set());
+            setHideUnmatched(prev => baseFilter === 'planned' ? prev : true);
+            return;
+          case 'z':
+          case 'Z':
+            e.preventDefault();
+            setBaseFilter('all');
+            setPriorityFilters(prev => {
+              const next = new Set(prev);
+              if (next.has('important')) {
+                next.delete('important');
+              } else {
+                next.add('important');
+              }
+              return next;
+            });
+            setHideUnmatched(true);
+            return;
+          case 'j':
+          case 'J':
+            e.preventDefault();
+            setBaseFilter('all');
+            setPriorityFilters(prev => {
+              const next = new Set(prev);
+              if (next.has('urgent')) {
+                next.delete('urgent');
+              } else {
+                next.add('urgent');
+              }
+              return next;
+            });
+            setHideUnmatched(true);
+            return;
+          case 'q':
+          case 'Q':
+            e.preventDefault();
+            setBaseFilter('all');
+            setPriorityFilters(prev => {
+              const next = new Set(prev);
+              if (next.has('both')) {
+                next.delete('both');
+              } else {
+                next.add('both');
+              }
+              return next;
+            });
+            setHideUnmatched(true);
             return;
         }
+      }
 
-        // 筛选快捷键 - 只在没有选中节点时生效
-        if (!selectedId) {
-            switch (e.key) {
-                case '0':
-                    e.preventDefault();
-                    setBaseFilter('all');
-                    setPriorityFilters(new Set());
-                    return;
-                case '1':
-                    e.preventDefault();
-                    // 切换逻辑：如果当前是 overdue，返回 all；否则切换到 overdue
-                    setBaseFilter(prev => prev === 'overdue' ? 'all' : 'overdue');
-                    setPriorityFilters(new Set());
-                    setHideUnmatched(prev => baseFilter === 'overdue' ? prev : true);
-                    return;
-                case '2':
-                    e.preventDefault();
-                    // 切换逻辑：如果当前是 today，返回 all；否则切换到 today
-                    setBaseFilter(prev => prev === 'today' ? 'all' : 'today');
-                    setPriorityFilters(new Set());
-                    setHideUnmatched(prev => baseFilter === 'today' ? prev : true);
-                    return;
-                case '3':
-                    e.preventDefault();
-                    // 切换逻辑：如果当前是 planned，返回 all；否则切换到 planned
-                    setBaseFilter(prev => prev === 'planned' ? 'all' : 'planned');
-                    setPriorityFilters(new Set());
-                    setHideUnmatched(prev => baseFilter === 'planned' ? prev : true);
-                    return;
-                case 'z':
-                case 'Z':
-                    e.preventDefault();
-                    setBaseFilter('all');
-                    setPriorityFilters(prev => {
-                        const next = new Set(prev);
-                        if (next.has('important')) {
-                            next.delete('important');
-                        } else {
-                            next.add('important');
-                        }
-                        return next;
-                    });
-                    setHideUnmatched(true);
-                    return;
-                case 'j':
-                case 'J':
-                    e.preventDefault();
-                    setBaseFilter('all');
-                    setPriorityFilters(prev => {
-                        const next = new Set(prev);
-                        if (next.has('urgent')) {
-                            next.delete('urgent');
-                        } else {
-                            next.add('urgent');
-                        }
-                        return next;
-                    });
-                    setHideUnmatched(true);
-                    return;
-                case 'q':
-                case 'Q':
-                    e.preventDefault();
-                    setBaseFilter('all');
-                    setPriorityFilters(prev => {
-                        const next = new Set(prev);
-                        if (next.has('both')) {
-                            next.delete('both');
-                        } else {
-                            next.add('both');
-                        }
-                        return next;
-                    });
-                    setHideUnmatched(true);
-                    return;
+      // 节点操作快捷键 - 只在有选中节点时生效
+      if (selectedId) {
+        switch (e.key) {
+          case 'Tab':
+            e.preventDefault();
+            handleAddChild();
+            break;
+          case 'Enter':
+            e.preventDefault();
+            handleAddSibling();
+            break;
+          case 'Backspace':
+          case 'Delete':
+            handleDelete();
+            break;
+          case 'ArrowUp':
+            if (e.altKey) {
+              e.preventDefault();
+              handleMove('up');
             }
-        }
-
-        // 节点操作快捷键 - 只在有选中节点时生效
-        if (selectedId) {
-            switch (e.key) {
-                case 'Tab':
-                    e.preventDefault();
-                    handleAddChild();
-                    break;
-                case 'Enter':
-                    e.preventDefault();
-                    handleAddSibling();
-                    break;
-                case 'Backspace':
-                case 'Delete':
-                    handleDelete();
-                    break;
-                case 'ArrowUp':
-                    if (e.altKey) {
-                        e.preventDefault();
-                        handleMove('up');
-                    }
-                    break;
-                case 'ArrowDown':
-                    if (e.altKey) {
-                        e.preventDefault();
-                        handleMove('down');
-                    }
-                    break;
+            break;
+          case 'ArrowDown':
+            if (e.altKey) {
+              e.preventDefault();
+              handleMove('down');
             }
+            break;
         }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -774,7 +845,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans">
-      
+
       {/* Left Sidebar: Outline */}
       <SidebarLeft
         root={root}
@@ -806,6 +877,8 @@ export default function App() {
         }}
         hideUnmatched={hideUnmatched}
         onToggleHideUnmatched={() => setHideUnmatched(!hideUnmatched)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onUpdateStatus={(nodeId, status) => handleUpdateNodeById(nodeId, { status })}
         filterCounts={filterCounts}
       />
 
@@ -813,110 +886,110 @@ export default function App() {
       <div className="flex-1 flex flex-col relative overflow-hidden">
         {/* Toolbar */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
+          <button
+            onClick={loadFile}
+            className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+          >
+            <FolderOpen size={16} /> 打开
+          </button>
+          <button
+            onClick={() => saveFile()}
+            className={`flex items-center gap-2 px-3 py-2 rounded shadow text-sm font-medium text-white transition-colors ${isDirty ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-400 dark:bg-slate-600'}`}
+          >
+            {fileHandle ? <Save size={16} /> : <Download size={16} />}
+            {fileHandle ? '保存' : '导出'}
+          </button>
+
+          {/* 另存为按钮（带下拉菜单） */}
+          <div className="relative">
             <button
-                onClick={loadFile}
-                className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+              onClick={() => setShowSaveAsMenu(!showSaveAsMenu)}
+              className="flex items-center gap-1 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+              title="另存为"
             >
-                <FolderOpen size={16} /> 打开
-            </button>
-            <button
-                onClick={() => saveFile()}
-                className={`flex items-center gap-2 px-3 py-2 rounded shadow text-sm font-medium text-white transition-colors ${isDirty ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-400 dark:bg-slate-600'}`}
-            >
-                {fileHandle ? <Save size={16} /> : <Download size={16} />}
-                {fileHandle ? '保存' : '导出'}
+              <Copy size={16} />
+              另存为
+              <ChevronDown size={14} />
             </button>
 
-            {/* 另存为按钮（带下拉菜单） */}
-            <div className="relative">
-              <button
-                onClick={() => setShowSaveAsMenu(!showSaveAsMenu)}
-                className="flex items-center gap-1 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
-                title="另存为"
-              >
-                <Copy size={16} />
-                另存为
-                <ChevronDown size={14} />
-              </button>
+            {/* 下拉菜单 */}
+            {showSaveAsMenu && (
+              <>
+                {/* 点击外部关闭菜单 */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowSaveAsMenu(false)}
+                />
 
-              {/* 下拉菜单 */}
-              {showSaveAsMenu && (
-                <>
-                  {/* 点击外部关闭菜单 */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowSaveAsMenu(false)}
-                  />
+                <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
+                  <button
+                    onClick={() => {
+                      saveAsFile();
+                      setShowSaveAsMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
+                  >
+                    <Copy size={16} />
+                    <div>
+                      <div className="font-medium">另存为...</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">自定义文件名</div>
+                    </div>
+                  </button>
 
-                  <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
-                    <button
-                      onClick={() => {
-                        saveAsFile();
-                        setShowSaveAsMenu(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
-                    >
-                      <Copy size={16} />
-                      <div>
-                        <div className="font-medium">另存为...</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">自定义文件名</div>
+                  <button
+                    onClick={() => {
+                      quickSaveAsToday();
+                      setShowSaveAsMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left border-t border-slate-200 dark:border-slate-700"
+                  >
+                    <Calendar size={16} />
+                    <div>
+                      <div className="font-medium">保存为今日</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        TodoMind-{new Date().toISOString().slice(0, 10)}.json
                       </div>
-                    </button>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
-                    <button
-                      onClick={() => {
-                        quickSaveAsToday();
-                        setShowSaveAsMenu(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left border-t border-slate-200 dark:border-slate-700"
-                    >
-                      <Calendar size={16} />
-                      <div>
-                        <div className="font-medium">保存为今日</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
-                          TodoMind-{new Date().toISOString().slice(0, 10)}.json
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <button
-                onClick={() => setShowVersionHistory(true)}
-                className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
-                title="查看版本历史"
-            >
-                <Clock size={16} /> 历史
-            </button>
-            <button
-                onClick={handleClearData}
-                className="flex items-center justify-center bg-white dark:bg-slate-800 p-2 rounded shadow text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 transition-colors"
-                title="重置所有数据(需要确认)"
-            >
-                <RefreshCw size={16} />
-            </button>
+          <button
+            onClick={() => setShowVersionHistory(true)}
+            className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded shadow text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+            title="查看版本历史"
+          >
+            <Clock size={16} /> 历史
+          </button>
+          <button
+            onClick={handleClearData}
+            className="flex items-center justify-center bg-white dark:bg-slate-800 p-2 rounded shadow text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 transition-colors"
+            title="重置所有数据(需要确认)"
+          >
+            <RefreshCw size={16} />
+          </button>
         </div>
 
         {/* Status Bar */}
         <div className="absolute bottom-4 left-4 z-50 bg-white/80 dark:bg-slate-800/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-600 dark:text-slate-300 shadow-sm flex items-center gap-3 max-w-[600px]">
-           <div className="flex items-center gap-2">
-             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-             已自动保存到浏览器
-           </div>
-           {fileName && (
-             <div className="flex items-center gap-1 border-l border-slate-300 dark:border-slate-600 pl-3">
-               <span className="text-slate-400 dark:text-slate-500">文件:</span>
-               <button
-                 onClick={() => setShowFileInfoModal(true)}
-                 className="font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 truncate cursor-pointer transition-colors underline decoration-dotted underline-offset-2"
-                 title="点击查看文件详细信息"
-               >
-                 {fileName}
-               </button>
-             </div>
-           )}
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            已自动保存到浏览器
+          </div>
+          {fileName && (
+            <div className="flex items-center gap-1 border-l border-slate-300 dark:border-slate-600 pl-3">
+              <span className="text-slate-400 dark:text-slate-500">文件:</span>
+              <button
+                onClick={() => setShowFileInfoModal(true)}
+                className="font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 truncate cursor-pointer transition-colors underline decoration-dotted underline-offset-2"
+                title="点击查看文件详细信息"
+              >
+                {fileName}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Sync Notification */}
@@ -950,11 +1023,10 @@ export default function App() {
           {/* Lock/Unlock Button */}
           <button
             onClick={handleToggleLock}
-            className={`p-2 rounded-full shadow-lg transition-all hover:scale-110 ${
-              isLocked
-                ? 'bg-slate-600 hover:bg-slate-700 text-white'
-                : 'bg-green-600 hover:bg-green-700 text-white'
-            }`}
+            className={`p-2 rounded-full shadow-lg transition-all hover:scale-110 ${isLocked
+              ? 'bg-slate-600 hover:bg-slate-700 text-white'
+              : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}
             title={isLocked ? '点击解锁以编辑' : '点击锁定以防止编辑'}
           >
             {isLocked ? <Lock size={20} /> : <Unlock size={20} />}
@@ -970,25 +1042,25 @@ export default function App() {
         )}
 
         <MindMapCanvas
-            root={root}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onToggleExpand={handleToggleExpand}
-            filterMode={baseFilter !== 'all' || priorityFilters.size > 0}
-            filteredIds={filteredIds}
-            hideUnmatched={hideUnmatched}
-            onUpdateNode={handleUpdateNodeById}
-            onAddSibling={handleAddSibling}
-            onAddChild={handleAddChild}
-            onDelete={handleDelete}
-            onMove={handleMove}
-            onNodeDrop={handleNodeDrop}
-            isLocked={isLocked}
-            newlyCreatedNodeId={newlyCreatedNodeId}
-            onClearNewlyCreated={() => setNewlyCreatedNodeId(null)}
-            onResetViewRef={resetViewRef}
-            baseFilter={baseFilter}
-            priorityFilters={priorityFilters}
+          root={root}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onToggleExpand={handleToggleExpand}
+          filterMode={baseFilter !== 'all' || priorityFilters.size > 0}
+          filteredIds={filteredIds}
+          hideUnmatched={hideUnmatched}
+          onUpdateNode={handleUpdateNodeById}
+          onAddSibling={handleAddSibling}
+          onAddChild={handleAddChild}
+          onDelete={handleDelete}
+          onMove={handleMove}
+          onNodeDrop={handleNodeDrop}
+          isLocked={isLocked}
+          newlyCreatedNodeId={newlyCreatedNodeId}
+          onClearNewlyCreated={() => setNewlyCreatedNodeId(null)}
+          onResetViewRef={resetViewRef}
+          baseFilter={baseFilter}
+          priorityFilters={priorityFilters}
         />
       </div>
 
@@ -1045,7 +1117,7 @@ export default function App() {
               {!filePath && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded p-3">
                   <p className="text-xs text-yellow-800 dark:text-yellow-200">
-                    ⚠️ 由于浏览器安全限制，无法显示完整文件系统路径。<br/>
+                    ⚠️ 由于浏览器安全限制，无法显示完整文件系统路径。<br />
                     文件通过 File System Access API 访问。
                   </p>
                 </div>
@@ -1115,6 +1187,12 @@ export default function App() {
         isOpen={showVersionHistory}
         onClose={() => setShowVersionHistory(false)}
         onRestore={handleRestoreVersion}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );

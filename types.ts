@@ -6,6 +6,13 @@ export enum TaskStatus {
   DONE = 'done',
 }
 
+export interface NodeHistoryItem {
+  timestamp: number;
+  field: string;
+  oldValue?: string;
+  newValue?: string;
+}
+
 export interface MindNode {
   id: string;
   text: string;
@@ -17,6 +24,8 @@ export interface MindNode {
   children: MindNode[];
   isExpanded: boolean;
   createdAt: number;
+  updatedAt?: number;
+  history?: NodeHistoryItem[];
 }
 
 export interface FileData {

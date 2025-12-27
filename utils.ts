@@ -11,6 +11,8 @@ export const createNode = (text: string = ''): MindNode => ({
   children: [],
   isExpanded: true,
   createdAt: Date.now(),
+  updatedAt: Date.now(),
+  history: [],
 });
 
 // Recursive function to find a node by ID
@@ -78,7 +80,7 @@ export const addSiblingNode = (root: MindNode, referenceId: string, newNode: Min
 // Delete a node
 export const deleteNodeFromTree = (root: MindNode, nodeId: string): MindNode => {
   if (root.id === nodeId) return root; // Cannot delete root this way usually
-  
+
   // Check if direct child
   if (root.children.some(c => c.id === nodeId)) {
     return { ...root, children: root.children.filter(c => c.id !== nodeId) };
